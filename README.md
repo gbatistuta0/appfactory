@@ -10,7 +10,7 @@ stops at every step that matters so you stay in control.
 
 [![PyPI](https://img.shields.io/pypi/v/appfactory.svg)](https://pypi.org/project/appfactory/)
 [![CI](https://github.com/gbatistuta0/appfactory/actions/workflows/ci.yml/badge.svg)](https://github.com/gbatistuta0/appfactory/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/gbatistuta0/appfactory/blob/main/LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 ![MCP](https://img.shields.io/badge/MCP-server-8A2BE2.svg)
 
@@ -22,7 +22,7 @@ claude mcp add appfactory -s user -- uvx appfactory@latest
 
 ---
 
-<p align="center"><img src="docs/demo/demo.gif" alt="A real, sped-up agent session: AppFactory scores water-tracking niches with live App Store data" width="900"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/gbatistuta0/appfactory/main/docs/demo/demo.gif" alt="A real, sped-up agent session: AppFactory scores water-tracking niches with live App Store data" width="900"></p>
 
 A real session, sped up. That first step needs no accounts. From there, the same agent can take the idea all the way to a TestFlight build.
 
@@ -80,7 +80,7 @@ claude mcp add appfactory -s user \
   -- uvx appfactory@latest
 ```
 
-Every variable is listed in [docs/SETUP.md](docs/SETUP.md).
+Every variable is listed in [docs/SETUP.md](https://github.com/gbatistuta0/appfactory/blob/main/docs/SETUP.md).
 
 ### 3. Run it
 
@@ -122,7 +122,7 @@ Agents make mistakes and read untrusted web content, so AppFactory assumes they 
 - **Third-party text is data.** App Store listings and reviews are labelled so the agent doesn't follow
   instructions hidden in them.
 
-Threat model and limits: [SECURITY.md](SECURITY.md).
+Threat model and limits: [SECURITY.md](https://github.com/gbatistuta0/appfactory/blob/main/SECURITY.md).
 
 ## FAQ
 
@@ -141,18 +141,18 @@ offer, a quiz onboarding, 6 app and 8 store languages) are recommendations. You 
 
 ## Docs
 
-- [docs/SETUP.md](docs/SETUP.md): services, keys and environment variables
-- [docs/PIPELINE_PLAYBOOK.md](docs/PIPELINE_PLAYBOOK.md): every stage, its order and its gotchas
-- [docs/TOOLS.md](docs/TOOLS.md): all 120+ tools
-- [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md)
+- [docs/SETUP.md](https://github.com/gbatistuta0/appfactory/blob/main/docs/SETUP.md): services, keys and environment variables
+- [docs/PIPELINE_PLAYBOOK.md](https://github.com/gbatistuta0/appfactory/blob/main/docs/PIPELINE_PLAYBOOK.md): every stage, its order and its gotchas
+- [docs/TOOLS.md](https://github.com/gbatistuta0/appfactory/blob/main/docs/TOOLS.md): all 120+ tools
+- [SECURITY.md](https://github.com/gbatistuta0/appfactory/blob/main/SECURITY.md), [CONTRIBUTING.md](https://github.com/gbatistuta0/appfactory/blob/main/CONTRIBUTING.md), [AGENTS.md](https://github.com/gbatistuta0/appfactory/blob/main/AGENTS.md)
 
 ## Contributing
 
-Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). If AppFactory saves you time, a ⭐
+Issues and pull requests are welcome. See [CONTRIBUTING.md](https://github.com/gbatistuta0/appfactory/blob/main/CONTRIBUTING.md). If AppFactory saves you time, a ⭐
 helps other people find it.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/gbatistuta0/appfactory/blob/main/LICENSE)
 
 <!-- mcp-name: io.github.gbatistuta0/appfactory -->
