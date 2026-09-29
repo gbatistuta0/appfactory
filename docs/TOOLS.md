@@ -7,313 +7,313 @@ Tools whose service is disabled return `service_disabled` and do nothing (see th
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `ai_configure` | AI provider/model selection (for now fal.ai/Flux schnell — the cheapest) | ai, supabase |
-| `ai_deploy_proxy` | Deploy the AI backend. With app.spec.json in subscription mode this is backend_deploy (the full function set + migrations + secrets + auth); credits mode keeps the legacy... | ai, supabase |
+| `ai_configure` | Report the AI provider/model selection (currently fal.ai Flux schnell); does not change anything | ai, supabase |
+| `ai_deploy_proxy` | Deploy the AI backend: the full spec-driven backend in subscription mode, or the legacy ai-proxy in credits mode (live, needs human approval) | ai, supabase |
 
 ## animation
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `animation_fetch_recolor` | Fetch a CUTE app-specific Lottie animation + recolor it to the palette → Resources/Animations/<slot>.json | lottie |
+| `animation_fetch_recolor` | Fetch a cute Lottie animation from the free LottieFiles library and recolor it to the app palette into Resources/Animations/<slot>.json | lottie |
 
 ## app
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `app_scaffold` | Scaffold a new SwiftUI app from app.spec.json (+xcodegen) and init the pipeline manifest | none |
-| `app_inject_config` | Fill in the scaffolded app's AppConfig + StoreKit tokens | none |
-| `app_sync_spec` | Re-generate AppSpec.swift, PaywallSource.swift and Configuration.storekit (and prune the String Catalogs to locales.app) after editing app.spec.json | none |
+| `app_scaffold` | Scaffold a new SwiftUI app from app.spec.json (xcodegen), init the pipeline manifest and a local git repo | none |
+| `app_inject_config` | Fill in the scaffolded app's AppConfig and StoreKit tokens (Supabase, proxy, PostHog, product ids, credits, paywall strategy) | none |
+| `app_sync_spec` | Regenerate AppSpec.swift, PaywallSource.swift and Configuration.storekit and prune String Catalogs to locales.app | none |
 
 ## asc
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `asc_token_check` | Check App Store Connect auth through the asc CLI: binary present, which credentials it uses (config.toml asc_* keys as env, else the asc keychain profile) and one live... | apple |
-| `asc_list_apps` | List the apps in App Store Connect (LIVE; requires issuer_id) | apple |
-| `asc_get_app` | Find the App Store Connect app by bundle id (LIVE) | apple |
-| `asc_create_bundle_id` | Register a bundle id in App Store Connect (LIVE write), then its capabilities | apple |
-| `asc_create_app` | Create an app SHELL in App Store Connect (fastlane produce — requires Apple ID). AUTOMATIC | apple |
-| `asc_create_subscription_group` | Create a subscription group for the app (LIVE write) | apple |
-| `asc_finalize_subscription` | FINALIZE one subscription (ORDER: localization → availability (all but CHN) → price → intro offer). The intro offer follows the SPEC: pass the spec product's `intro`... | apple |
-| `asc_finalize_submission_requirements` | Fill submit-blocking app-level fields in one call: Content Rights + Copyright + Age Rating (4+) + Free Price + App Review Contact + App Review Notes (7-item test flow). App... | apple |
-| `asc_append_subscription_disclosure` | APPEND subscription disclosure + Terms/EULA + Privacy link to the description (per language) (Apple 3.1.2). Idempotent (skips if the marker is present). If terms_url is... | apple |
-| `asc_ensure_subscription_prices` | Walk ALL of the app's subscriptions; set a price on those that have NONE (clears MISSING_METADATA). Idempotent (those with a price are skipped). Price comes from... | apple |
-| `asc_add_subscription_group_localization` | Subscription group display name (required for MISSING_METADATA) | apple |
-| `asc_localize_subscription` | Localize the subscription in MULTIPLE LANGUAGES. items={locale:{name,description}}. IAP-unsupported languages are skipped | apple |
-| `asc_localize_group` | Localize the subscription group name in multiple languages | apple |
-| `asc_create_subscription` | Create a subscription product. period: ONE_WEEK/ONE_MONTH/.../ONE_YEAR (LIVE write) | apple |
-| `asc_submit_for_review` | SUBMIT the app to App Store review. Always needs out-of-band human approval (`appfactory approve <id>`), even with approvals off. Without a valid approval_id nothing is submitted | apple |
-| `asc_sbp_check` | Small Business Program proof: latest SUBSCRIPTION/SUMMARY sales report (gzip TSV) → US proceeds/price ratio (≈0.85 SBP, ≈0.70 standard). Needs a Finance-role key:... | apple |
+| `asc_token_check` | Verify App Store Connect authentication through the asc CLI with one live read-only call | apple |
+| `asc_list_apps` | List the apps in App Store Connect (live, read-only) | apple |
+| `asc_get_app` | Find one App Store Connect app by bundle id (live, read-only) | apple |
+| `asc_create_bundle_id` | Register a bundle id in App Store Connect and check or apply its App ID capabilities (live write, needs human approval) | apple |
+| `asc_create_app` | Create an app shell in App Store Connect via fastlane produce (live write, needs human approval) | apple |
+| `asc_create_subscription_group` | Create a subscription group for an app (live write, needs human approval) | apple |
+| `asc_finalize_subscription` | Finalize one subscription in order: localization, availability (all but CHN), price, intro offer (live write, needs human approval) | apple |
+| `asc_finalize_submission_requirements` | Fill the submit-blocking app-level fields in one call: content rights, copyright, age rating (4+), free price, App Review contact and notes (live write, needs human approval) | apple |
+| `asc_append_subscription_disclosure` | Append the subscription disclosure, Terms/EULA and Privacy links to the app description in every language (Apple 3.1.2; live write, needs human approval) | apple |
+| `asc_ensure_subscription_prices` | Set a price on every subscription of the app that has none, clearing MISSING_METADATA (live write, needs human approval) | apple |
+| `asc_add_subscription_group_localization` | Add one display-name localization to a subscription group (required to clear MISSING_METADATA; live write, needs human approval) | apple |
+| `asc_localize_subscription` | Localize a subscription's name and description in many languages at once (live write, needs human approval) | apple |
+| `asc_localize_group` | Localize a subscription group's display name in many languages at once (live write, needs human approval) | apple |
+| `asc_create_subscription` | Create a subscription product inside a subscription group (live write, needs human approval) | apple |
+| `asc_submit_for_review` | Submit the app to App Store review (live write, ALWAYS needs out-of-band human approval, even with approvals off) | apple |
+| `asc_sbp_check` | Prove Small Business Program status from the latest subscription sales report (US proceeds/price ratio, about 0.85 SBP vs 0.70 standard; live, read-only) | apple |
 
 ## aso
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `aso_check_name` | Is the App Store name (globally unique) available — iTunes Search exact-name collision. Call BEFORE asc_create_app | none |
-| `aso_find_available_name` | Pick the first AVAILABLE App Store name from the candidates (a taken name gets the submit rejected) | none |
-| `aso_fetch_competitors` | Fetch competitor apps via iTunes Search (LIVE, read-only) | none |
-| `aso_top_grossing` | Top-grossing apps (revenue proxy) — proven-idea hunting. genre: any App Store category name from aso.GENRES (books, business, developer_tools, education, entertainment,... | none |
-| `aso_search_hints` | App Store autocomplete = REAL search demand (free, no auth). IDEA-STAGE HARD GATE | none |
-| `aso_niche_score` | Idea go/no-go score: demand + competitor weakness + saturation penalty + monetization (0-100) | none |
-| `aso_competitor_iap` | Competitor's subscription/IAP price ladder (from the App Store product page). Input to the pricing decision | none |
-| `aso_unit_economics` | Unit economics: credit count × AI cost vs subscription revenue → margin, break-even, warnings | none |
-| `aso_scaffold_outputs` | Create the outputs/<App>/ skeleton (including apple-metadata.md, 32 languages) | none |
-| `aso_validate_metadata` | Validate outputs/<App>/02-metadata/apple-metadata.md | none |
-| `aso_run` | Start the ASO stage (mandatory step): outputs skeleton + skill instructions | none |
-| `aso_complete` | Validate the ASO output + mark the 'aso' stage done (opens the metadata/deliver gate) | none |
+| `aso_check_name` | Check whether an App Store app name is free, by exact-name collision in iTunes Search | none |
+| `aso_find_available_name` | Pick the first available App Store name from a candidate list | none |
+| `aso_fetch_competitors` | Fetch competitor apps for a search term through iTunes Search (live, read-only) | none |
+| `aso_top_grossing` | List the top-grossing apps of a storefront and optional category as a revenue proxy | none |
+| `aso_search_hints` | Query App Store autocomplete for real search demand; the idea-stage hard gate (0 suggestions for a real term = no demand, reject) | none |
+| `aso_niche_score` | Score an idea 0-100 from demand, competitor weakness, saturation and monetization, with a go/no-go verdict | none |
+| `aso_competitor_iap` | Fetch a competitor's subscription/IAP price ladder from its App Store product page | none |
+| `aso_unit_economics` | Compute margin, break-even and warnings from prices, credits and AI cost (pure calculation, no network) | none |
+| `aso_scaffold_outputs` | Create the outputs/<App>/ ASO skeleton including apple-metadata.md in 32 languages | none |
+| `aso_validate_metadata` | Validate outputs/<App>/02-metadata/apple-metadata.md (fields and character limits) | none |
+| `aso_run` | Start the mandatory ASO stage: create the outputs skeleton and return the skill instructions | none |
+| `aso_complete` | Validate the ASO output and mark the 'aso' stage done, opening the metadata/deliver gate | none |
 
 ## backend
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `backend_render` | Make the scaffolded backend follow app.spec.json (offline, idempotent): prune supabase/ to the monetization mode, render functions/_shared/app.gen.ts + config.toml (Apple... | none |
-| `backend_deploy` | Deploy the spec's Supabase backend (LIVE unless dry_run): migrations (tracked), secrets (AI_MODEL, AI_FALLBACK_MODEL, caps, REQUIRE_CONSENT, RC_PROJECT_ID from app outputs,... | supabase |
+| `backend_render` | Render the scaffolded backend from app.spec.json (offline, idempotent): prune supabase/ to the monetization mode, generate shared config, legal sources and listing locales | none |
+| `backend_deploy` | Deploy the spec's Supabase backend: migrations, secrets, auth, legal build and edge functions (live unless dry_run; needs human approval) | supabase |
 
 ## build
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `build_xcode_version` | Return the Xcode version (the first validation tool of the build_* group) | xcode |
-| `build_list_simulators` | List the available iOS simulators (iPhones are surfaced first) | xcode |
-| `build_boot_sim` | Boot the simulator and open Simulator.app | xcode |
-| `build_screenshot` | Capture a screenshot from the booted simulator → out_path (PNG) | xcode |
-| `build_for_sim` | Build the project for the simulator (verification). project = .xcodeproj/.xcworkspace path | xcode |
-| `build_test` | xcodebuild test (on the simulator) | xcode |
-| `build_archive` | xcodebuild archive (generic iOS) → .xcarchive | xcode |
-| `build_export_ipa` | xcodebuild -exportArchive → .ipa | xcode |
+| `build_xcode_version` | Return the installed Xcode version | xcode |
+| `build_list_simulators` | List the available iOS simulators, iPhones first | xcode |
+| `build_boot_sim` | Boot an iOS simulator and open Simulator.app | xcode |
+| `build_screenshot` | Capture a PNG screenshot of the booted simulator to out_path | xcode |
+| `build_for_sim` | Build the Xcode project for the simulator to verify it compiles | xcode |
+| `build_test` | Run xcodebuild test for the scheme on a simulator | xcode |
+| `build_archive` | Run xcodebuild archive (generic iOS device) to produce a .xcarchive | xcode |
+| `build_export_ipa` | Run xcodebuild -exportArchive to turn a .xcarchive into an .ipa | xcode |
 
 ## config
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `config_doctor` | Report config status: which keys are present/missing (secrets are masked) | none |
-| `config_set` | Write NON-secret settings to ~/.appfactory/config.toml (0600). Fields left empty are unchanged | none |
+| `config_doctor` | Report which config keys in ~/.appfactory/config.toml are present or missing (secrets masked) | none |
+| `config_set` | Write several NON-secret settings (ASC key id/issuer/path, team id, copyright, support email, ...) to ~/.appfactory/config.toml | none |
 
 ## cpp
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `cpp_build_all` | Create one CPP per Search Ads theme (create→version→localization) + return the deep-link URLs. themes=[{name, locale?}] from the theme/keyword clusters in the ASO output. The... | apple |
+| `cpp_build_all` | Create one Custom Product Page per Search Ads theme (page, version, localization) and return the deep-link URLs (live write, needs human approval) | apple |
 
 ## deliver
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `deliver_metadata` | Upload metadata to the ASC draft — DIRECT API (bypasses the fastlane 'No data' bug). ASO-gated | apple |
-| `deliver_screenshots` | Upload screenshots to the ASC draft — checksum-based INCREMENTAL sync (NOT fastlane). Skips when local MD5 == ASC sourceFileChecksum; uploads only missing/changed ones → fast +... | apple |
-| `deliver_screenshots_audit` | Read-only screenshot readiness audit: per locale and display type (iPhone 6.9" = APP_IPHONE_67, Watch = APP_WATCH_ULTRA) the ASC set holds exactly the local... | apple |
-| `deliver_subscription_review_screenshots` | Upload the App Review screenshot of every subscription from store/review-screenshots/<product key>.png (hard paywall with real sandbox prices for the default offering, the... | apple |
+| `deliver_metadata` | Upload metadata to the App Store Connect draft version through the API (live write, needs human approval, ASO-gated) | apple |
+| `deliver_screenshots` | Upload screenshots to the App Store Connect draft with checksum-based incremental sync (live write, needs human approval) | apple |
+| `deliver_screenshots_audit` | Read-only audit that App Store Connect screenshot sets exactly match the local fastlane/screenshots files (order, COMPLETE state, MD5) | apple |
+| `deliver_subscription_review_screenshots` | Upload the App Review screenshot of every subscription from store/review-screenshots/<product key>.png (live write, needs human approval) | apple |
 
 ## design
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `design_screens_skeleton` | STRUCTURAL skeleton for design/screens.json: with a design brief, the onboarding follows the brief's onboarding.flow (stubs for kinds the default funnel lacks) and carries... | none |
-| `design_research_collect` | Design research: the category leaders across storefronts (iTunes Search for `terms` + the genre's top-grossing/top-free charts, looked up for screenshots/artwork) → downloads... | none |
-| `design_research_brief_template` | The design/research/brief.json shape (pre-filled with the reference ids): purpose, analysis, and a direction per section (palette tokens, typography, components, density,... | none |
-| `design_research_check` | The design_research gate: ≥6 reference apps with icon + screenshots on disk, and a valid brief (every section cited, screenshot concept citing ≥4 competitor sets, palette/type... | none |
-| `design_generate` | Prepare the app's Claude Design project (the factory's ONLY design source) from the design brief, app.spec.json and design/screens.json. Writes STRUCTURAL scaffolds to... | design |
-| `design_record_upload` | Record a finished Claude Design upload: SHA-256 of every file in upload_plan.json → design/project/claude_design.json. open_url = the claude.ai/design link from render_preview... | design |
-| `design_upload_status` | Is the local Claude Design project uploaded and unchanged since (the check every design gate runs)? | design |
-| `design_export_png` | Rasterize a Claude Design board with local headless Chrome (not Claude in Chrome). serve_url comes from mcp__claude-design__render_preview and is used once, never stored. Icon:... | design |
+| `design_screens_skeleton` | Produce the structural skeleton for design/screens.json, following the design brief's onboarding flow when one exists | none |
+| `design_research_collect` | Download category-leader App Store screenshots and icons into design/research/apps/ with references.json (study material only) | none |
+| `design_research_brief_template` | Return the design/research/brief.json shape pre-filled with the reference ids | none |
+| `design_research_check` | Run the design_research gate: at least 6 reference apps on disk and a valid, cited brief | none |
+| `design_generate` | Prepare the app's Claude Design project from the brief, spec and screens.json: scaffolds, mascot boards, canvas, store layout and upload plan | design |
+| `design_record_upload` | Record a finished Claude Design upload: the SHA-256 of every file in upload_plan.json into design/project/claude_design.json | design |
+| `design_upload_status` | Check whether the local Claude Design project is uploaded and unchanged since (read-only) | design |
+| `design_export_png` | Rasterize a Claude Design board to PNG with local headless Chrome | design |
 
 ## env
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `env_doctor` | Check the local toolchain: xcode, swift, node, asc (App Store Connect CLI), fastlane (app creation only), uv, git, maestro + Java 17+ + maestro-live (end-to-end flows, Viewer) | none |
+| `env_doctor` | Check the local toolchain: xcode, swift, node, ruby, git, uv, asc, fastlane, maestro, Java 17+ and maestro- live | none |
 
 ## firebase
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `firebase_setup` | Set up Firebase Analytics (MANDATORY for every app): GCP project + iOS app + GoogleService-Info.plist → Resources/. Fully automatic (gcloud authed + firebase-tools). Live event... | firebase |
+| `firebase_setup` | Set up Firebase Analytics: GCP project, iOS app and GoogleService-Info.plist into Resources/ (live write, needs human approval) | firebase |
 
 ## github
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `github_create_repo` | Open a PRIVATE GitHub repo under the configured GitHub account (`github_user`, else the active gh login) + push | github |
-| `github_push` | Commit + push changes (regular tracking). Human approval | github |
-| `github_issues_bootstrap` | Create/refresh the label set (ios, backend, store, lead, founder, next, later, other-project) on <owner>/<repo>, gh runs as the configured GitHub account. dry_run returns the... | github |
-| `github_issue_create` | Open an issue for postponed work: imperative title, a role label (+ next/later), body with what/why/done-when. Runs gh as the configured GitHub account. dry_run returns the... | github |
+| `github_create_repo` | Create a PRIVATE GitHub repo under the configured account and push the app (needs human approval unless dry_run) | github |
+| `github_push` | Commit all changes in the app repo and push (live write, needs human approval) | github |
+| `github_issues_bootstrap` | Create or refresh the GitHub label set (ios, backend, store, lead, founder, next, later, other-project) on a repo (needs human approval unless dry_run) | github |
+| `github_issue_create` | Open a GitHub issue for postponed work (needs human approval unless dry_run) | github |
 
 ## growth
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `growth_build_slideshows` | Render viral TikTok/Reels slideshows (SlideSmith pattern, free, no scheduling). CLAUDE writes the hooks/slide text; images are generated with the app's AI (fal).... | none |
+| `growth_build_slideshows` | Render viral TikTok/Reels slideshows (1080x1920 PNGs) to marketing/growth/<name>/NN.png | none |
 
 ## icon
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `icon_install` | Install the Claude Design app icon: the 1024×1024 master exported from B01-AppIcon.dc.html (design_export_png → design/icon.png), already uploaded + recorded... | none |
-| `icon_generate` | OPT-IN ONLY (spend → approval): fal raster DRAFT → design/icon_drafts/ as reference for the Claude Design icon board. Never installs an icon — the shipped icon comes from... | ai |
+| `icon_install` | Install the Claude Design app icon (1024x1024 master) into AppIcon.appiconset and write .appfactory/verify/icon.json | none |
+| `icon_generate` | Generate a fal.ai raster icon DRAFT into design/icon_drafts/ as reference for the Claude Design icon board (paid, opt-in only) | ai |
 
 ## idea
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `idea_harvest` | Phase 0 idea harvest across EVERY App Store category and storefront (not only AI/photo apps) | none |
-| `idea_evaluate` | Evidence bundle to rank one idea (any category): autocomplete count, niche score/verdict, two-window newcomer traction (12 + 6 months), leaders with price ladders, ai_needed... | none |
+| `idea_harvest` | Sweep top-grossing and top-free charts across every App Store category and storefront to find proven and rising ideas | none |
+| `idea_evaluate` | Build the evidence bundle to rank one idea in any category | none |
 
 ## legal
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `legal_render` | Fill the legal sources (store/privacy/*.md, backend/PRIVACY.md) from the spec + config (APP_NAME, CONTROLLER, SUPPORT_EMAIL, dates, trial/plan sentences) and keep/drop the <!--... | none |
-| `legal_check` | What still blocks publishing the legal pages (placeholders, unrendered blocks, missing languages) | none |
-| `legal_verify` | LIVE read-only: every privacy/terms page per app language answers 200 in that language with the support email and no placeholder | none |
+| `legal_render` | Fill the legal sources (store/privacy/*.md, backend/PRIVACY.md) from the spec and config, keeping or dropping the HealthKit block | none |
+| `legal_check` | List what still blocks publishing the legal pages: placeholders, unrendered blocks, missing languages | none |
+| `legal_verify` | Check that every deployed privacy/terms page answers 200 in each app language with the support email and no placeholder (live, read-only) | none |
 
 ## localize
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `localize_apply` | Merge translations into the in-app String Catalog for the spec's locales.app (translations = {english_key: {locale: value}}; other locales are ignored) | none |
+| `localize_apply` | Merge translations into the in-app String Catalog for the spec's app locales | none |
 
 ## maestro
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `maestro_test` | Run the app's Maestro flows (.maestro/) on the booted simulator through tools/maestro-live: it starts `maestro mcp`, opens the Maestro Viewer (http://localhost:7777, or the... | maestro, xcode |
+| `maestro_test` | Run the app's Maestro flows (.maestro/) on the booted simulator with the live Viewer, and write .appfactory/verify/maestro.json | maestro, xcode |
 
 ## mascot
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `mascot_blink` | Closed-eye copies of the APPROVED pose PNGs (<state>-blink.png next to each): iris blobs in the upper 55 %, inpainted with the surrounding color, closed-lid arcs. Default... | none |
-| `mascot_assets` | Import approved poses + blink variants into Resources/Assets.xcassets/Mascot/<state>{,-blink}.imageset (namespaced → Image("Mascot/idle")); states without a pose borrow a... | none |
+| `mascot_blink` | Create closed-eye blink copies (<state>-blink.png) of the approved mascot pose PNGs | none |
+| `mascot_assets` | Import approved mascot poses and blink variants into Resources/Assets.xcassets/Mascot/ | none |
 
 ## metadata
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `metadata_check` | Validate apple-metadata.md (fields + character limits). No writes | none |
-| `metadata_export` | apple-metadata.md → fastlane/metadata/<locale>/*.txt (validated) | none |
-| `metadata_listing_check` | Validate store/metadata/listing.json: name/subtitle ≤30, keywords 95–100, promo ≤170, no word overlap across fields or cross-indexed storefronts, description ends with the... | none |
+| `metadata_check` | Validate an apple-metadata.md file: required fields and character limits (no writes) | none |
+| `metadata_export` | Export apple-metadata.md to fastlane/metadata/<locale>/*.txt after validation | none |
+| `metadata_listing_check` | Validate store/metadata/listing.json: length limits, keyword rules, no word overlap, subscription disclosure and legal links | none |
 | `metadata_render_listing` | Sync listing.json to the spec (store locales, IAP copy slots) and fill the legal URLs | none |
 
 ## onboarding
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `onboarding_plan` | Return guidance for onboarding step-count selection (does not generate code) | none |
+| `onboarding_plan` | Return guidance for choosing the onboarding step count; does not change any file | none |
 
 ## orchestrator
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `orchestrator_preflight` | Pre-flight for an autonomous run: run options confirmed + config keys + fastlane session freshness + caffeinate command. Ready if blockers is empty | none |
-| `orchestrator_next_action` | Next action for the driver loop: stage + subagent role + retry budget + instructions. done=True means the pipeline is finished (submit needs human approval). Refuses until the... | none |
-| `orchestrator_record_attempt` | Count a failed attempt of a stage (after a gate failure). Returns: {stage, attempts, should_retry} | none |
-| `orchestrator_needs_human` | Self-correction exhausted: write NEEDS_HUMAN.md and return its path | none |
+| `orchestrator_preflight` | Pre-flight for an autonomous run: run options confirmed, config keys present, fastlane session fresh, caffeinate command | none |
+| `orchestrator_next_action` | Return the next action for the autonomous driver loop: stage, subagent role, retry budget and instructions | none |
+| `orchestrator_record_attempt` | Count one failed attempt of a stage after a gate failure | none |
+| `orchestrator_needs_human` | Write NEEDS_HUMAN.md when self-correction is exhausted and return its path | none |
 
 ## pipeline
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `pipeline_status` | App pipeline status: which stages are done/pending, and what comes next | none |
-| `pipeline_next` | Return the next mandatory step + its instructions (driver). Refuses until the run options are confirmed (run_options → run_options_save) unless skip_options_check=true | none |
-| `pipeline_mark` | Mark a stage (done/in_progress/pending) | none |
-| `pipeline_validate` | Run a stage's enforced gate WITHOUT modifying the manifest | none |
+| `pipeline_status` | Show which pipeline stages are done or pending and what comes next | none |
+| `pipeline_next` | Return the next mandatory pipeline step with its instructions | none |
+| `pipeline_mark` | Set a pipeline stage's status (done, in_progress, pending) in the app manifest | none |
+| `pipeline_validate` | Run a stage's enforced gate without modifying the manifest | none |
 
 ## playbook
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `playbook` | Return the AppFactory run playbook (markdown). Read it before driving the pipeline | none |
+| `playbook` | Return the AppFactory run playbook as markdown | none |
 
 ## preview
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `preview_brief` | Write marketing/preview/BRIEF.md — the HyperFrames brief (destination: app-store-preview) for this app's App Preview, from app.spec.json (size, fps, duration, poster, locales... | none |
-| `preview_check` | Offline readiness of the App Preview set: BRIEF, real recordings per source locale, one preview per spec.preview locale (or a documented share), every file 886x1920 / <=30 fps... | none |
-| `preview_review_sheets` | Self-review material for every final preview (ffmpeg): a contact sheet (fps=2, 270 px, 6x5), a phone-size sheet (fps=1, 360 px, 5x3) and a 12-frame strip around the fastest... | none |
-| `preview_review_log` | Log one self-review round of a final preview (file relative to the app): scores 1–10 for hook, readability, motion, variety, brand, music; while any is under 8, the 3 worst... | none |
-| `preview_upload` | Upload fastlane/app_previews/<locale>/ to the editable version's IPHONE_67 preview sets through the asc CLI (shares from spec.preview.shared resolved, poster time code from the... | apple |
+| `preview_brief` | Write marketing/preview/BRIEF.md (the HyperFrames App Preview brief) from app.spec.json and create the recordings folders | none |
+| `preview_check` | Check offline readiness of the App Preview set: brief, recordings, one preview per locale, ffprobe specs, self-review status | none |
+| `preview_review_sheets` | Generate self-review material (contact sheet, phone-size sheet, transition strip) for every final preview with ffmpeg | none |
+| `preview_review_log` | Log one self-review round (scores 1-10 and worst problems) for a final preview file | none |
+| `preview_upload` | Upload fastlane/app_previews/<locale>/ to the editable version's iPhone preview sets via the asc CLI (needs human approval unless dry_run) | apple |
 
 ## pricing
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `pricing_unit_economics` | Unit economics from the MEASURED AI cost per call (latest backend/eval/results for spec.ai.model, or explicit cost_photo/cost_text) × usage profiles up to the daily caps, per... | none |
+| `pricing_unit_economics` | Compute unit economics from the measured AI cost per call and usage profiles, and write the generated blocks of store/pricing.md | none |
 
 ## revenuecat
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `revenuecat_setup` | Idempotently set up the RC v2 project: entitlement(premium)+4 sub attach+SDK key+secret | revenuecat |
+| `revenuecat_setup` | Idempotently set up the RevenueCat v2 project: premium entitlement, subscription attachments, SDK key and Supabase secret (live write, needs human approval) | revenuecat |
 
 ## run
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `run_options` | Every optional part of a run (services, monetization, trial, paywalls, onboarding quiz, mascot, languages, store locales, screenshots, preview video, CPPs, analytics, ratings,... | none |
-| `run_options_save` | Save the user's answers ({option id: value}, every id from run_options). Validates types, choices and dependencies; services go to config.toml, the rest to app.spec.json... | none |
+| `run_options` | List every optional part of a run with its question, kind, choices, default and current value | none |
+| `run_options_save` | Save the user's answers to the run options and mark options confirmed | none |
 
 ## screenshot
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `screenshot_capture` | Raw capture from the booted simulator → marketing/raw/<locale>/<name>.png | xcode |
-| `screenshot_brand` | Branded App Store screenshots via the node compositor, rendering the Claude Design store layout (run screenshot_apply_layout first; screenshot_build_all does both) | none |
-| `screenshot_apply_layout` | Merge the Claude Design store layout (design/project/store_layout.json, the ST0N boards) into marketing/screenshots/config.json so the compositor renders the approved layout... | none |
-| `screenshot_sync` | branded → fastlane/screenshots/<locale>/ | none |
-| `screenshot_build_all` | MANDATORY turnkey screenshot step (UI-test style, all apps): generate a sample image → build+install → localized captions from the catalog → capture 32 languages × 6 rich... | xcode |
-| `screenshot_generate_sample` | Generate a sample image with fal.ai → Resources/sample_headshot.jpg (enriches Result/Gallery) | ai |
-| `screenshot_onboarding_heroes` | LEGACY, OPT-IN ONLY: fal hero images per onboarding step (onb_step0..N). Onboarding visuals are designed in Claude Design (design/screens.json boards); use this only for a... | ai |
+| `screenshot_capture` | Capture a raw screenshot from the booted simulator into marketing/raw/<locale>/<name>.png | xcode |
+| `screenshot_brand` | Render branded App Store screenshots with the node compositor using the Claude Design store layout | none |
+| `screenshot_apply_layout` | Merge the Claude Design store layout (design/project/store_layout.json) into marketing/screenshots/config.json | none |
+| `screenshot_sync` | Copy branded screenshots into fastlane/screenshots/<locale>/ | none |
+| `screenshot_build_all` | Run the whole turnkey screenshot step: sample image, build and install, captions, capture 32 languages x 6 screens, brand, sync to fastlane/screenshots | xcode |
+| `screenshot_generate_sample` | Generate a sample image with fal.ai into Resources/sample_headshot.jpg to fill the Result/Gallery screens (paid) | ai |
+| `screenshot_onboarding_heroes` | LEGACY, opt-in: generate fal hero images per onboarding step (onb_step0..N) | ai |
 
 ## setup
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `setup_status` | Setup state per service: enabled, keys set/missing (never values), missing tools with install commands, approvals mode, and `next` steps. Call this first; nothing here needs a... | none |
-| `setup_services` | Turn services on or off (research is always on). Ask the user which ones they want first. Returns setup_status | none |
-| `setup_set` | Set ONE non-secret config key (e.g. asc_key_id, team_id, support_email). Secrets are refused: use setup_credentials so they never pass through the chat. An empty value clears... | none |
-| `setup_approvals` | Set human approvals for live writes: 'required' (recommended). 'off' is refused here; only the human can switch it off, on the setup_credentials page | none |
-| `setup_credentials` | Open a local browser page (127.0.0.1, random port, one-time token) where the USER types the credentials of the given (default: all enabled) services. Secrets never reach you.... | none |
+| `setup_status` | Report the AppFactory setup state per service: enabled, keys set or missing (never values), missing tools with install commands, approvals mode | none |
+| `setup_services` | Turn optional services on or off (research is always on) | none |
+| `setup_set` | Set ONE non-secret config key such as asc_key_id, team_id or support_email; an empty value clears it | none |
+| `setup_approvals` | Set human approvals for live writes to 'required' (recommended) | none |
+| `setup_credentials` | Open a local browser page (127.0.0.1, random port, one-time token) where the USER types credentials for the given services | none |
 
 ## signing
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `signing_setup_distribution` | Create a distribution cert + install it into a temporary keychain (WWDR included). {cert_id, identity, keychain} | apple |
-| `signing_create_profile` | Create an IOS_APP_STORE provisioning profile + write it to the standard locations | apple |
+| `signing_setup_distribution` | Create a distribution certificate and install it into a temporary keychain (WWDR included; live write, needs human approval) | apple |
+| `signing_create_profile` | Create an IOS_APP_STORE provisioning profile and write it to the standard locations (live write, needs human approval) | apple |
 
 ## store
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `store_setup` | Idempotent App Store Connect + RevenueCat setup from app.spec.json + listing.json | apple |
+| `store_setup` | Idempotent App Store Connect and RevenueCat setup from app.spec.json and listing.json (capabilities, subscriptions, prices, offers, age rating, legal URLs, RC... | apple |
 
 ## storekit
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `storekit_generate` | Write Resources/Configuration.storekit from the app's app.spec.json (group, levels, free-trial intro offers, trial-less offer product, en_US). Deterministic; run after any... | none |
-| `storekit_parity` | Compare a Configuration.storekit with app.spec.json; returns every mismatch (price, period, level, intro offer, missing/extra product, group, locale). ok=true means in parity | none |
+| `storekit_generate` | Write Resources/Configuration.storekit from app.spec.json (group, levels, free-trial intros, trial-less offer product) | none |
+| `storekit_parity` | Compare a Configuration.storekit with app.spec.json and list every mismatch (read-only) | none |
 
 ## supabase
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `supabase_list_projects` | List Supabase projects (LIVE) | supabase |
-| `supabase_list_orgs` | List Supabase organizations (org_id for project creation) | supabase |
-| `supabase_get_keys` | Get the project's url + anon key (anon→app). The service_role key is never returned to the agent; it is saved to ~/.appfactory/supabase/<ref>.json (0600) for server-side use | supabase |
-| `supabase_run_sql` | Run SQL on the project (schema/migration) — LIVE write, human approval. Destructive statements (DROP, TRUNCATE, ALTER … DROP, GRANT/REVOKE on auth, DELETE/UPDATE without WHERE)... | supabase |
-| `supabase_set_secret` | Write an edge function secret (FAL_KEY etc.) — server-side, never enters the app. Human approval | supabase |
-| `supabase_create_project` | Create a new Supabase project (LIVE — provisions resources). Human approval | supabase |
+| `supabase_list_projects` | List Supabase projects (live, read-only) | supabase |
+| `supabase_list_orgs` | List Supabase organizations (live, read-only) | supabase |
+| `supabase_get_keys` | Get a Supabase project's URL and anon key; the service_role key is saved to ~/.appfactory/supabase/<ref>.json (0600) and never returned | supabase |
+| `supabase_run_sql` | Run SQL on a Supabase project (live write, needs human approval) | supabase |
+| `supabase_set_secret` | Write one edge-function secret on a Supabase project, server-side only (live write, needs human approval) | supabase |
+| `supabase_create_project` | Create a new Supabase project (live write that provisions billable resources, needs human approval) | supabase |
 
 ## team
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `team_brief` | Render docs/TEAM.md, docs/team/{ios,backend,store}.md, docs/onboarding-plan.md (from design/screens.json), store/aso-research.md and docs/CHECKLIST.md from the spec. sessions:... | none |
+| `team_brief` | Render the team docs (TEAM.md, per-role briefs, onboarding plan, ASO research, CHECKLIST.md) from the spec | none |
 
 ## testflight
 
 | Tool | What it does | Needs service |
 |---|---|---|
-| `testflight_ship` | End-to-end TestFlight: distribution signing → archive → App Store profiles (the app and every extension in project.yml, exact bundle-id match, created right before export so... | apple, xcode |
+| `testflight_ship` | Build, sign and upload a TestFlight build end to end: distribution signing, archive, App Store profiles, manual-signing export, asc builds upload (needs human approval) | apple, xcode |

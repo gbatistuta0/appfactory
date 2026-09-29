@@ -8,6 +8,7 @@ deliver_/ai_ tool groups.
 from __future__ import annotations
 
 import functools
+import inspect
 import json
 import os
 import shutil
@@ -44,6 +45,7 @@ from . import screenshot as ss_mod
 from . import setup_gui, setup_tools
 from . import signing as sign_mod
 from . import supabase as supa_mod
+from . import tool_meta
 from .proc import run as _run
 
 mcp = FastMCP(
@@ -131,7 +133,11 @@ def tool(fn):
             return {"ok": False, "service_disabled": off, "error": f"{fn.__name__}: " + cfg.disabled_message(off)}
         return _finish(fn.__name__, fn(*args, **kwargs))
 
-    return mcp.tool(wrapped)
+    params = list(inspect.signature(fn).parameters)
+    wrapped.__signature__ = tool_meta.describe_signature(fn)  # per-parameter descriptions for the JSON schema
+    wrapped.__annotations__ = {k: v.annotation for k, v in wrapped.__signature__.parameters.items()}
+    ann = tool_meta.annotations_for(fn.__name__, params, needed)
+    return mcp.tool(wrapped, title=ann["title"], annotations=ann)
 
 
 def _option_na(oid: str) -> dict[str, Any]:
@@ -148,36 +154,52 @@ def _approval(action: str, args: dict[str, Any], approval_id: str | None, *, for
 # ---------- setup (never service-gated; works with no config file) ----------
 @tool
 def setup_status() -> dict[str, Any]:
-    """Setup state per service: enabled, keys set/missing (never values), missing tools with install commands,
-    approvals mode, and `next` steps. Call this first; nothing here needs a config file."""
+    """Report the AppFactory setup state per service: enabled, keys set or missing (never values), missing tools
+    with install commands, approvals mode.
+
+    Use when: first call of every session, and after any setup change. Works with no config file.
+    Returns: {ok, services: {name: {enabled, keys, missing}}, approvals, next: [steps]}."""
     return setup_tools.status()
 
 
 @tool
 def setup_services(enable: list[str] | None = None, disable: list[str] | None = None) -> dict[str, Any]:
-    """Turn services on or off (research is always on). Ask the user which ones they want first. Returns setup_status."""
+    """Turn optional services on or off (research is always on).
+
+    Use when: the user has said which services they want; ask them first. Not for: entering credentials (use
+    setup_credentials).
+    Returns: the setup_status result after the change."""
     return setup_tools.set_services(enable, disable)
 
 
 @tool
 def setup_set(key: str, value: str) -> dict[str, Any]:
-    """Set ONE non-secret config key (e.g. asc_key_id, team_id, support_email). Secrets are refused: use
-    setup_credentials so they never pass through the chat. An empty value clears the key."""
+    """Set ONE non-secret config key such as asc_key_id, team_id or support_email; an empty value clears it.
+
+    Use when: changing a single key. Secrets are refused; use setup_credentials so they never pass through the
+    chat. For several fields at once use config_set.
+    Returns: {ok, key, error?}."""
     return setup_tools.set_key(key, value)
 
 
 @tool
 def setup_approvals(mode: str) -> dict[str, Any]:
-    """Set human approvals for live writes: 'required' (recommended). 'off' is refused here; only the human can
-    switch it off, on the setup_credentials page."""
+    """Set human approvals for live writes to 'required' (recommended).
+
+    Use when: re-enabling approvals. 'off' is refused here; only the human can switch it off on the
+    setup_credentials page.
+    Returns: {ok, approvals}."""
     return setup_tools.set_approvals(mode)
 
 
 @tool
 def setup_credentials(services: list[str] | None = None) -> dict[str, Any]:
-    """Open a local browser page (127.0.0.1, random port, one-time token) where the USER types the credentials
-    of the given (default: all enabled) services. Secrets never reach you. Returns at once with the url; tell the
-    user to fill the form and Save, then call setup_status()."""
+    """Open a local browser page (127.0.0.1, random port, one-time token) where the USER types credentials for the
+    given services.
+
+    Use when: setup_status shows missing keys. Secrets never reach the agent; return immediately, tell the user
+    to fill the form and Save, then call setup_status.
+    Returns: {ok, url, services}."""
     try:
         return setup_gui.start(services)
     except ValueError as e:
@@ -186,7 +208,11 @@ def setup_credentials(services: list[str] | None = None) -> dict[str, Any]:
 
 @tool
 def config_doctor() -> dict[str, Any]:
-    """Report config status: which keys are present/missing (secrets are masked)."""
+    """Report which config keys in ~/.appfactory/config.toml are present or missing (secrets masked).
+
+    Use when: diagnosing ASC/Finance key paths, session state or CLI availability. Not for: overall setup
+    guidance (use setup_status) or toolchain checks (use env_doctor).
+    Returns: {ok, config_path, present, missing, locales, asc_p8_resolved, session, asc_cli, maestro, notes}."""
     c = cfg.load_config()
     present, missing = {}, []
     for key, desc in cfg.KNOWN_KEYS.items():
@@ -228,10 +254,12 @@ def config_set(
     asc_finance_key_filepath: str | None = None,
     asc_vendor_number: str | None = None,
 ) -> dict[str, Any]:
-    """Write NON-secret settings to ~/.appfactory/config.toml (0600). Fields left empty are unchanged.
+    """Write several NON-secret settings (ASC key id/issuer/path, team id, copyright, support email, ...) to
+    ~/.appfactory/config.toml.
 
-    Secrets (passwords, sessions, tokens, API keys, phone) are refused here so they never pass through
-    the model: the human enters them on the page opened by setup_credentials()."""
+    Use when: setting multiple ASC/identity fields together; fields left empty are unchanged. Not for: secrets
+    (use setup_credentials) or one key (use setup_set).
+    Returns: the config_doctor result after the update, or {ok: false, error} if a secret key was passed."""
     updates = {
         "asc_key_id": asc_key_id, "asc_issuer_id": asc_issuer_id, "asc_key_filepath": asc_key_filepath,
         "team_id": team_id, "apple_id": apple_id, "copyright": copyright, "support_email": support_email,
@@ -248,11 +276,11 @@ def config_set(
 
 @tool
 def asc_token_check() -> dict[str, Any]:
-    """Check App Store Connect auth through the asc CLI: binary present, which credentials it uses
-    (config.toml asc_* keys as env, else the asc keychain profile) and one live read-only call.
+    """Verify App Store Connect authentication through the asc CLI with one live read-only call.
 
-    A successful `asc apps list --limit 1` proves key id, issuer and .p8 together.
-    """
+    Use when: before any asc_* tool, to confirm key id, issuer and .p8 work. Not for: listing apps (use
+    asc_list_apps).
+    Returns: {ok, asc: {path, version}, auth_source, key_id, p8, keychain_profiles, note, error?}."""
     c = cfg.load_config()
     doc = asc_cli.doctor()
     if not doc.get("ok"):
@@ -276,7 +304,10 @@ def asc_token_check() -> dict[str, Any]:
 
 @tool
 def asc_list_apps() -> dict[str, Any]:
-    """List the apps in App Store Connect (LIVE; requires issuer_id)."""
+    """List the apps in App Store Connect (live, read-only).
+
+    Use when: you need app ids or want to see what exists. To find one app by bundle id use asc_get_app.
+    Returns: {ok, count, apps: [{id, bundleId, name, sku}]}."""
     try:
         client = asc_mod.ASCClient()
     except asc_mod.ASCError as e:
@@ -298,7 +329,10 @@ def asc_list_apps() -> dict[str, Any]:
 
 @tool
 def asc_get_app(bundle_id: str) -> dict[str, Any]:
-    """Find the App Store Connect app by bundle id (LIVE)."""
+    """Find one App Store Connect app by bundle id (live, read-only).
+
+    Use when: you need the numeric app id for a known bundle id. Not for: listing all apps (use asc_list_apps).
+    Returns: {ok, data: {data: [app resources]}} from the ASC API."""
     try:
         client = asc_mod.ASCClient()
     except asc_mod.ASCError as e:
@@ -316,11 +350,12 @@ def _asc() -> tuple[Any, dict | None]:
 @tool
 def asc_create_bundle_id(identifier: str, name: str, app_dir: str | None = None,
                          apply_capabilities: bool = False, approval_id: str | None = None) -> dict[str, Any]:
-    """Register a bundle id in App Store Connect (LIVE write), then its capabilities.
+    """Register a bundle id in App Store Connect and check or apply its App ID capabilities (live write, needs
+    human approval).
 
-    The App ID capabilities (IN_APP_PURCHASE, APPLE_ID_AUTH/PRIMARY_APP_CONSENT, HEALTHKIT if
-    spec.health.enabled) must exist BEFORE any key, profile or signing step. With app_dir the spec's
-    capabilities are checked right away; apply_capabilities=true also applies them. Human approval."""
+    Use when: first ASC step for a new app; capabilities (IN_APP_PURCHASE, Sign in with Apple, HEALTHKIT if
+    enabled) must exist before signing. Not for: creating the app record (use asc_create_app).
+    Returns: {bundle_id: <ASC result>, capabilities: <store_setup report>} or an approval_required refusal."""
     refused = _approval("asc_create_bundle_id", {"identifier": identifier, "name": name, "app_dir": app_dir,
                                                  "apply_capabilities": apply_capabilities}, approval_id)
     if refused:
@@ -341,15 +376,11 @@ def asc_create_bundle_id(identifier: str, name: str, app_dir: str | None = None,
 def asc_create_app(bundle_id: str, app_name: str | None = None, candidate_names: list[str] | None = None,
                    sku: str | None = None, primary_language: str = "en-US",
                    approval_id: str | None = None) -> dict[str, Any]:
-    """Create an app SHELL in App Store Connect (fastlane produce — requires Apple ID). AUTOMATIC.
+    """Create an app shell in App Store Connect via fastlane produce (live write, needs human approval).
 
-    The one ASC write that does not go through the asc CLI: Apple's public API cannot create apps and
-    `asc web apps create` needs the same interactive 2FA web session, so produce stays.
-
-    App names are globally unique. Pass `candidate_names` → the MCP AUTOMATICALLY picks
-    the first available one (on a "name taken" error it moves to the next) and returns app_id.
-    `app_name` (single name) is for backward compatibility; it's converted to a one-element candidate list.
-    """
+    Use when: after aso_check_name confirms a free name; pass candidate_names and the first available is used.
+    Not for: bundle ids (asc_create_bundle_id) or metadata (deliver_metadata).
+    Returns: {ok, app_id, name, ...} or an approval_required refusal."""
     names = candidate_names or ([app_name] if app_name else [])
     refused = _approval("asc_create_app", {"bundle_id": bundle_id, "names": names, "sku": sku,
                                            "primary_language": primary_language}, approval_id)
@@ -360,7 +391,11 @@ def asc_create_app(bundle_id: str, app_name: str | None = None, candidate_names:
 
 @tool
 def asc_create_subscription_group(app_id: str, reference_name: str, approval_id: str | None = None) -> dict[str, Any]:
-    """Create a subscription group for the app (LIVE write)."""
+    """Create a subscription group for an app (live write, needs human approval).
+
+    Use when: hand-building the subscription tree. Prefer store_setup, which does groups, products, prices and
+    offers idempotently from app.spec.json.
+    Returns: {ok, data: {data: {id, ...}}} or an approval_required refusal."""
     refused = _approval("asc_create_subscription_group", {"app_id": app_id, "reference_name": reference_name}, approval_id)
     if refused:
         return refused
@@ -371,10 +406,12 @@ def asc_create_subscription_group(app_id: str, reference_name: str, approval_id:
 @tool
 def asc_finalize_subscription(sub_id: str, name: str, description: str, usd_price: str,
                               period: str | None = None, intro: dict | None = None, approval_id: str | None = None) -> dict[str, Any]:
-    """FINALIZE one subscription (ORDER: localization → availability (all but CHN) → price → intro offer).
-    The intro offer follows the SPEC: pass the spec product's `intro` ({"type":"free","duration":"P3D"});
-    it is created per territory. Offer products: pass nothing (no intro offer). `period` is ignored (the old
-    embedded offers were wrong). Prefer store_setup, which does every product idempotently."""
+    """Finalize one subscription in order: localization, availability (all but CHN), price, intro offer (live
+    write, needs human approval).
+
+    Use when: fixing a single product by hand. Prefer store_setup, which does every product idempotently. Pass
+    the spec product's intro (e.g. {"type": "free", "duration": "P3D"}); offer products get no intro.
+    Returns: {ok, steps...} per step, or an approval_required refusal."""
     refused = _approval("asc_finalize_subscription", {"sub_id": sub_id, "name": name, "description": description, "usd_price": usd_price, "period": period, "intro": intro}, approval_id)
     if refused:
         return refused
@@ -389,13 +426,12 @@ def asc_finalize_submission_requirements(bundle_id: str, copyright: str | None =
                                          free: bool = True, review_notes: str | None = None,
                                          app_name: str | None = None,
                                          ai_services: str | None = None, approval_id: str | None = None) -> dict[str, Any]:
-    """Fill submit-blocking app-level fields in one call: Content Rights + Copyright +
-    Age Rating (4+) + Free Price + App Review Contact + App Review Notes (7-item test flow).
-    App Privacy EXCLUDED (not in Apple's API → set via ASC web UI; appDataUsages endpoints all 404).
-    Called before submit, per app. RULE: if copyright is omitted, it's read from config
-    ("copyright" key — set your own via config_set); if contact_email is omitted, support_email
-    is used (NOT apple_id, which is only the developer-account login).
-    If review_notes is omitted, a generic 7-item template is filled with app_name/ai_services (Apple 2.1)."""
+    """Fill the submit-blocking app-level fields in one call: content rights, copyright, age rating (4+), free
+    price, App Review contact and notes (live write, needs human approval).
+
+    Use when: once per app before asc_submit_for_review. App Privacy is not in Apple's API and must be set in
+    the ASC web UI. Missing copyright falls back to config; missing contact_email to support_email.
+    Returns: {ok, steps...} or an approval_required refusal."""
     refused = _approval("asc_finalize_submission_requirements", {"bundle_id": bundle_id, "copyright": copyright, "contact_first": contact_first, "contact_last": contact_last, "contact_phone": contact_phone, "contact_email": contact_email, "free": free, "review_notes": review_notes, "app_name": app_name, "ai_services": ai_services}, approval_id)
     if refused:
         return refused
@@ -414,8 +450,12 @@ def asc_finalize_submission_requirements(bundle_id: str, copyright: str | None =
 @tool
 def asc_append_subscription_disclosure(bundle_id: str, privacy_url: str, terms_url: str | None = None,
                                        disclosure_by_locale: dict[str, str] | None = None, approval_id: str | None = None) -> dict[str, Any]:
-    """APPEND subscription disclosure + Terms/EULA + Privacy link to the description (per language) (Apple 3.1.2).
-    Idempotent (skips if the marker is present). If terms_url is omitted, Apple's standard EULA is used. Truncated to ≤4000."""
+    """Append the subscription disclosure, Terms/EULA and Privacy links to the app description in every language
+    (Apple 3.1.2; live write, needs human approval).
+
+    Use when: preparing a subscription app for review. Idempotent (skips when the marker is present) and
+    truncated to 4000 characters. Not for: uploading other metadata (use deliver_metadata).
+    Returns: {ok, per-locale results} or an approval_required refusal."""
     refused = _approval("asc_append_subscription_disclosure", {"bundle_id": bundle_id, "privacy_url": privacy_url, "terms_url": terms_url, "disclosure_by_locale": disclosure_by_locale}, approval_id)
     if refused:
         return refused
@@ -427,8 +467,12 @@ def asc_append_subscription_disclosure(bundle_id: str, privacy_url: str, terms_u
 @tool
 def asc_ensure_subscription_prices(bundle_id: str, usd_price_by_product: dict[str, str] | None = None,
                                    default_usd: str | None = None, approval_id: str | None = None) -> dict[str, Any]:
-    """Walk ALL of the app's subscriptions; set a price on those that have NONE (clears MISSING_METADATA).
-    Idempotent (those with a price are skipped). Price comes from usd_price_by_product[productId] or default_usd."""
+    """Set a price on every subscription of the app that has none, clearing MISSING_METADATA (live write, needs
+    human approval).
+
+    Use when: subscriptions are stuck in MISSING_METADATA for price. Idempotent: priced subscriptions are
+    skipped.
+    Returns: {ok, priced: [...], skipped: [...]} or an approval_required refusal."""
     refused = _approval("asc_ensure_subscription_prices", {"bundle_id": bundle_id, "usd_price_by_product": usd_price_by_product, "default_usd": default_usd}, approval_id)
     if refused:
         return refused
@@ -443,7 +487,11 @@ def asc_ensure_subscription_prices(bundle_id: str, usd_price_by_product: dict[st
 
 @tool
 def asc_add_subscription_group_localization(group_id: str, name: str, locale: str = "en-US", approval_id: str | None = None) -> dict[str, Any]:
-    """Subscription group display name (required for MISSING_METADATA)."""
+    """Add one display-name localization to a subscription group (required to clear MISSING_METADATA; live write,
+    needs human approval).
+
+    Use when: a single locale is needed. For many languages use asc_localize_group.
+    Returns: {ok, data} or an approval_required refusal."""
     refused = _approval("asc_add_subscription_group_localization", {"group_id": group_id, "name": name, "locale": locale}, approval_id)
     if refused:
         return refused
@@ -453,7 +501,10 @@ def asc_add_subscription_group_localization(group_id: str, name: str, locale: st
 
 @tool
 def asc_localize_subscription(sub_id: str, items: dict[str, dict[str, str]], approval_id: str | None = None) -> dict[str, Any]:
-    """Localize the subscription in MULTIPLE LANGUAGES. items={locale:{name,description}}. IAP-unsupported languages are skipped."""
+    """Localize a subscription's name and description in many languages at once (live write, needs human approval).
+
+    Use when: filling per-locale product copy. Languages the IAP API does not support are skipped.
+    Returns: {ok, done: [locales], skipped: [locales]} or an approval_required refusal."""
     refused = _approval("asc_localize_subscription", {"sub_id": sub_id, "items": items}, approval_id)
     if refused:
         return refused
@@ -463,7 +514,10 @@ def asc_localize_subscription(sub_id: str, items: dict[str, dict[str, str]], app
 
 @tool
 def asc_localize_group(group_id: str, name_by_locale: dict[str, str], approval_id: str | None = None) -> dict[str, Any]:
-    """Localize the subscription group name in multiple languages."""
+    """Localize a subscription group's display name in many languages at once (live write, needs human approval).
+
+    Use when: several locales are needed; for one locale use asc_add_subscription_group_localization.
+    Returns: {ok, done: [locales], skipped: [locales]} or an approval_required refusal."""
     refused = _approval("asc_localize_group", {"group_id": group_id, "name_by_locale": name_by_locale}, approval_id)
     if refused:
         return refused
@@ -473,7 +527,10 @@ def asc_localize_group(group_id: str, name_by_locale: dict[str, str], approval_i
 
 @tool
 def asc_create_subscription(group_id: str, product_id: str, name: str, period: str = "ONE_YEAR", family_shareable: bool = False, approval_id: str | None = None) -> dict[str, Any]:
-    """Create a subscription product. period: ONE_WEEK/ONE_MONTH/.../ONE_YEAR (LIVE write)."""
+    """Create a subscription product inside a subscription group (live write, needs human approval).
+
+    Use when: hand-building a single product. Prefer store_setup for the whole spec.
+    Returns: {ok, data: {data: {id, ...}}} or an approval_required refusal."""
     refused = _approval("asc_create_subscription", {"group_id": group_id, "product_id": product_id, "name": name, "period": period, "family_shareable": family_shareable}, approval_id)
     if refused:
         return refused
@@ -483,8 +540,12 @@ def asc_create_subscription(group_id: str, product_id: str, name: str, period: s
 
 @tool
 def asc_submit_for_review(app_id: str, approval_id: str | None = None) -> dict[str, Any]:
-    """SUBMIT the app to App Store review. Always needs out-of-band human approval (`appfactory approve
-    <id>`), even with approvals off. Without a valid approval_id nothing is submitted."""
+    """Submit the app to App Store review (live write, ALWAYS needs out-of-band human approval, even with approvals
+    off).
+
+    Use when: everything else is ready and the human has approved. Without a valid approval_id nothing is
+    submitted. Not for: uploading a TestFlight build (use testflight_ship).
+    Returns: {ok, review_submission_id, detail} or {ok: false, blockers, next}, or an approval_required refusal."""
     refused = _approval("asc_submit_for_review", {"app_id": app_id}, approval_id, force=True,
                         reason="submits the app to App Store review")
     if refused:
@@ -509,8 +570,11 @@ def asc_submit_for_review(app_id: str, approval_id: str | None = None) -> dict[s
 
 @tool
 def env_doctor() -> dict[str, Any]:
-    """Check the local toolchain: xcode, swift, node, asc (App Store Connect CLI), fastlane (app
-    creation only), uv, git, maestro + Java 17+ + maestro-live (end-to-end flows, Viewer)."""
+    """Check the local toolchain: xcode, swift, node, ruby, git, uv, asc, fastlane, maestro, Java 17+ and maestro-
+    live.
+
+    Use when: something fails to run locally. Not for: credentials/config (use config_doctor or setup_status).
+    Returns: {ok, available: {tool: bool}, versions: {tool: str}, notes?}."""
     checks = {
         "asc": _run([asc_cli.binary() or "asc", "--version"]),
         "xcodebuild": _run(["xcodebuild", "-version"]),
@@ -536,62 +600,86 @@ def env_doctor() -> dict[str, Any]:
 
 @tool
 def build_xcode_version() -> dict[str, Any]:
-    """Return the Xcode version (the first validation tool of the build_* group)."""
+    """Return the installed Xcode version.
+
+    Use when: a quick check that xcodebuild works before build_* tools.
+    Returns: {ok, exit_code, stdout, stderr} (stdout holds the version lines)."""
     return _run(["xcodebuild", "-version"])
 
 
 @tool
 def build_list_simulators() -> dict[str, Any]:
-    """List the available iOS simulators (iPhones are surfaced first)."""
+    """List the available iOS simulators, iPhones first.
+
+    Use when: you need a udid for build_boot_sim, build_screenshot or screenshot_capture.
+    Returns: {ok, count, simulators: [{name, udid, state, runtime}]}."""
     return build_mod.list_simulators()
 
 
 @tool
 def build_boot_sim(udid: str) -> dict[str, Any]:
-    """Boot the simulator and open Simulator.app."""
+    """Boot an iOS simulator and open Simulator.app.
+
+    Use when: before capturing screenshots or running maestro_test. Idempotent if already booted.
+    Returns: {ok, exit_code, stdout, stderr}, or {ok, note: 'already booted'}."""
     return build_mod.boot_sim(udid)
 
 
 @tool
 def build_screenshot(udid: str, out_path: str) -> dict[str, Any]:
-    """Capture a screenshot from the booted simulator → out_path (PNG)."""
+    """Capture a PNG screenshot of the booted simulator to out_path.
+
+    Use when: an ad-hoc check. For localized store screenshots use screenshot_capture / screenshot_build_all.
+    Returns: {ok, exit_code, stdout, stderr, path}."""
     return build_mod.screenshot(udid, out_path)
 
 
 @tool
 def build_for_sim(project: str, scheme: str, device_name: str = "iPhone 16") -> dict[str, Any]:
-    """Build the project for the simulator (verification). project = .xcodeproj/.xcworkspace path."""
+    """Build the Xcode project for the simulator to verify it compiles.
+
+    Use when: verifying code changes. Not for: signed/release builds (use build_archive or testflight_ship).
+    Returns: {ok, exit_code, stdout, stderr} from xcodebuild."""
     return build_mod.build_for_sim(project, scheme, device_name)
 
 
 @tool
 def build_test(project: str, scheme: str, device_name: str = "iPhone 16") -> dict[str, Any]:
-    """xcodebuild test (on the simulator)."""
+    """Run xcodebuild test for the scheme on a simulator.
+
+    Use when: running unit/UI tests. For end-to-end Maestro flows use maestro_test.
+    Returns: {ok, exit_code, stdout, stderr} from xcodebuild."""
     return build_mod.run_tests(project, scheme, device_name)
 
 
 @tool
 def maestro_test(app_dir: str, tags: str | None = None, device: str | None = None) -> dict[str, Any]:
-    """Run the app's Maestro flows (.maestro/) on the booted simulator through tools/maestro-live:
-    it starts `maestro mcp`, opens the Maestro Viewer (http://localhost:7777, or the next free port)
-    in the browser so the founder watches the run live, and runs each flow with the MCP `run` tool.
-    Returns pass/fail per flow (JUnit also in build/maestro/report.xml). tags: comma-separated
-    include filter, e.g. "smoke". The app must already be installed (build_for_sim + simctl install).
-    Writes .appfactory/verify/maestro.json: the features gate and testflight_ship require every
-    `smoke` flow green. There is no headless option here: the Viewer is mandatory on the Mac."""
+    """Run the app's Maestro flows (.maestro/) on the booted simulator with the live Viewer, and write
+    .appfactory/verify/maestro.json.
+
+    Use when: verifying the app end to end; testflight_ship and the features gate require every smoke flow
+    green. The app must already be installed (build_for_sim + simctl install). Opens the Viewer at
+    http://localhost:7777; there is no headless mode.
+    Returns: {ok, flows: [{name, passed}], report path}."""
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
     return maestro_mod.run_flows(app_dir, tags=tag_list, device=device)
 
 
 @tool
 def build_archive(project: str, scheme: str, archive_path: str, configuration: str = "Release") -> dict[str, Any]:
-    """xcodebuild archive (generic iOS) → .xcarchive."""
+    """Run xcodebuild archive (generic iOS device) to produce a .xcarchive.
+
+    Use when: manual signing pipeline steps. For the whole signed TestFlight flow use testflight_ship.
+    Returns: {ok, exit_code, stdout, stderr} from xcodebuild."""
     return build_mod.archive(project, scheme, archive_path, configuration)
 
 
 @tool
 def build_export_ipa(archive_path: str, export_dir: str, export_options_plist: str) -> dict[str, Any]:
-    """xcodebuild -exportArchive → .ipa."""
+    """Run xcodebuild -exportArchive to turn a .xcarchive into an .ipa.
+
+    Use when: after build_archive with an ExportOptions.plist. For the whole flow use testflight_ship.
+    Returns: {ok, exit_code, stdout, stderr} from xcodebuild."""
     return build_mod.export_ipa(archive_path, export_dir, export_options_plist)
 
 
@@ -604,7 +692,10 @@ def _supa() -> tuple[Any, dict | None]:
 
 @tool
 def supabase_list_projects() -> dict[str, Any]:
-    """List Supabase projects (LIVE)."""
+    """List Supabase projects (live, read-only).
+
+    Use when: you need a project ref. For org ids use supabase_list_orgs.
+    Returns: {ok, projects: [{name, ref, region, status}]}."""
     cl, err = _supa()
     if err:
         return err
@@ -619,7 +710,10 @@ def supabase_list_projects() -> dict[str, Any]:
 
 @tool
 def supabase_list_orgs() -> dict[str, Any]:
-    """List Supabase organizations (org_id for project creation)."""
+    """List Supabase organizations (live, read-only).
+
+    Use when: you need the org_id for supabase_create_project.
+    Returns: {ok, data: [{id, name}]}."""
     cl, err = _supa()
     if err:
         return err
@@ -628,8 +722,11 @@ def supabase_list_orgs() -> dict[str, Any]:
 
 @tool
 def supabase_get_keys(ref: str) -> dict[str, Any]:
-    """Get the project's url + anon key (anon→app). The service_role key is never returned to the
-    agent; it is saved to ~/.appfactory/supabase/<ref>.json (0600) for server-side use."""
+    """Get a Supabase project's URL and anon key; the service_role key is saved to
+    ~/.appfactory/supabase/<ref>.json (0600) and never returned.
+
+    Use when: wiring the app (app_inject_config) or backend.
+    Returns: {ok, project_url, anon_key, service_role_key_file}."""
     cl, err = _supa()
     if err:
         return err
@@ -647,8 +744,12 @@ def supabase_get_keys(ref: str) -> dict[str, Any]:
 
 @tool
 def supabase_run_sql(ref: str, sql: str, approval_id: str | None = None) -> dict[str, Any]:
-    """Run SQL on the project (schema/migration) — LIVE write, human approval. Destructive statements
-    (DROP, TRUNCATE, ALTER … DROP, GRANT/REVOKE on auth, DELETE/UPDATE without WHERE) always need approval."""
+    """Run SQL on a Supabase project (live write, needs human approval).
+
+    Use when: applying schema or migrations by hand; backend_deploy applies the spec's migrations for you.
+    Destructive statements (DROP, TRUNCATE, ALTER ... DROP, GRANT/REVOKE on auth, DELETE/UPDATE without WHERE)
+    always need approval.
+    Returns: {ok, data} rows/result, or an approval_required refusal."""
     bad = approvals_mod.destructive_sql(sql)
     refused = _approval("supabase_run_sql", {"ref": ref, "sql": sql}, approval_id, force=bool(bad),
                         reason=("destructive SQL: " + " | ".join(bad)) if bad else "")
@@ -662,7 +763,10 @@ def supabase_run_sql(ref: str, sql: str, approval_id: str | None = None) -> dict
 
 @tool
 def supabase_set_secret(ref: str, name: str, value: str, approval_id: str | None = None) -> dict[str, Any]:
-    """Write an edge function secret (FAL_KEY etc.) — server-side, never enters the app. Human approval."""
+    """Write one edge-function secret on a Supabase project, server-side only (live write, needs human approval).
+
+    Use when: adding a single secret such as FAL_KEY. backend_deploy sets the standard set for you.
+    Returns: {ok, name} (value never echoed), or an approval_required refusal."""
     refused = _approval("supabase_set_secret", {"ref": ref, "name": name, "value": value}, approval_id)
     if refused:
         return refused
@@ -675,7 +779,10 @@ def supabase_set_secret(ref: str, name: str, value: str, approval_id: str | None
 @tool
 def supabase_create_project(name: str, org_id: str, region: str, db_pass: str,
                             approval_id: str | None = None) -> dict[str, Any]:
-    """Create a new Supabase project (LIVE — provisions resources). Human approval."""
+    """Create a new Supabase project (live write that provisions billable resources, needs human approval).
+
+    Use when: the app has no backend project yet. Check supabase_list_projects first to avoid duplicates.
+    Returns: {ok, data: {id/ref, name, region, ...}} or an approval_required refusal."""
     refused = _approval("supabase_create_project", {"name": name, "org_id": org_id, "region": region,
                                                     "db_pass": db_pass}, approval_id)
     if refused:
@@ -689,13 +796,12 @@ def supabase_create_project(name: str, org_id: str, region: str, db_pass: str,
 @tool
 def app_scaffold(name: str | None = None, bundle_id: str | None = None, display_name: str | None = None,
                  dest_dir: str | None = None, spec: dict[str, Any] | str | None = None) -> dict[str, Any]:
-    """Scaffold a new SwiftUI app from app.spec.json (+xcodegen) and init the pipeline manifest.
+    """Scaffold a new SwiftUI app from app.spec.json (xcodegen), init the pipeline manifest and a local git repo.
 
-    spec: optional full spec dict, a dict of overrides on the defaults, or a path to an
-    app.spec.json; otherwise the defaults for name/bundle_id. The spec is written to the app dir and
-    drives products, StoreKit file, placements, locales, onboarding length, monetization mode
-    (subscription strips the credit economy) and the Supabase backend mode.
-    """
+    Use when: starting a new app after idea validation. The spec drives products, StoreKit file, locales,
+    onboarding length, monetization mode and backend mode. Not for: editing an existing app (use app_sync_spec
+    after changing the spec).
+    Returns: {ok, dir, name, bundle_id, manifest}."""
     res = app_mod.scaffold(name, bundle_id, display_name, dest_dir, spec=spec)
     if res.get("ok"):
         pipe_mod.init(res["dir"], res["name"], res["bundle_id"])
@@ -708,9 +814,12 @@ def app_scaffold(name: str | None = None, bundle_id: str | None = None, display_
 @tool
 def github_create_repo(app_dir: str, repo_name: str, dry_run: bool = True,
                        approval_id: str | None = None) -> dict[str, Any]:
-    """Open a PRIVATE GitHub repo under the configured GitHub account (`github_user`, else the active gh login) + push.
+    """Create a PRIVATE GitHub repo under the configured account and push the app (needs human approval unless
+    dry_run).
 
-    dry_run=True (default) returns the exact command without running it; a live run needs human approval."""
+    Use when: the app should be tracked on GitHub. dry_run=true (default) only returns the command. For later
+    commits use github_push.
+    Returns: {ok, command/url, dry_run} or an approval_required refusal."""
     if not dry_run:
         refused = _approval("github_create_repo", {"app_dir": app_dir, "repo_name": repo_name}, approval_id)
         if refused:
@@ -720,7 +829,10 @@ def github_create_repo(app_dir: str, repo_name: str, dry_run: bool = True,
 
 @tool
 def github_push(app_dir: str, message: str, approval_id: str | None = None) -> dict[str, Any]:
-    """Commit + push changes (regular tracking). Human approval."""
+    """Commit all changes in the app repo and push (live write, needs human approval).
+
+    Use when: regular tracking after milestones. For the first push of a new repo use github_create_repo.
+    Returns: {ok, commit, push} or an approval_required refusal."""
     refused = _approval("github_push", {"app_dir": app_dir, "message": message}, approval_id)
     if refused:
         return refused
@@ -729,8 +841,11 @@ def github_push(app_dir: str, message: str, approval_id: str | None = None) -> d
 
 @tool
 def firebase_setup(app_dir: str, bundle_id: str, app_name: str, approval_id: str | None = None) -> dict[str, Any]:
-    """Set up Firebase Analytics (MANDATORY for every app): GCP project + iOS app + GoogleService-Info.plist
-    → Resources/. Fully automatic (gcloud authed + firebase-tools). Live event tracking (from the phone)."""
+    """Set up Firebase Analytics: GCP project, iOS app and GoogleService-Info.plist into Resources/ (live write,
+    needs human approval).
+
+    Use when: once per app (mandatory for every app). Requires gcloud auth and firebase-tools.
+    Returns: {ok, project_id, app_id, google_analytics, console, plist} or an approval_required refusal."""
     refused = _approval("firebase_setup", {"app_dir": app_dir, "bundle_id": bundle_id, "app_name": app_name}, approval_id)
     if refused:
         return refused
@@ -756,13 +871,13 @@ def app_inject_config(
     credit_pack_large: int | None = None,
     paywall_strategy: str | None = None,
 ) -> dict[str, Any]:
-    """Fill in the scaffolded app's AppConfig + StoreKit tokens.
+    """Fill in the scaffolded app's AppConfig and StoreKit tokens (Supabase, proxy, PostHog, product ids, credits,
+    paywall strategy).
 
-    paywall_strategy: "hard_only" (hard paywall only) | "hard_and_offer" (default,
-    hard paywall + a discounted offer paywall on dismiss). Credit fields fall back
-    to defaults if omitted (15/10/10/30/60) — credit pack amounts must be kept in
-    sync with the server-side ai-proxy PACK_MAP.
-    """
+    Use when: after backend and RevenueCat values exist. Credit fields default to 15/10/10/30/60 and pack
+    amounts must match the server-side PACK_MAP. Not for: spec-driven changes (edit app.spec.json, then
+    app_sync_spec).
+    Returns: {ok, changed: [files]}."""
     return app_mod.inject_config(
         project_dir, supabase_url, supabase_anon_key, ai_proxy_url,
         posthog_key, product_yearly, product_weekly,
@@ -776,17 +891,11 @@ def app_inject_config(
 
 @tool
 def onboarding_plan(step_count: int = 12) -> dict[str, Any]:
-    """Return guidance for onboarding step-count selection (does not generate code).
+    """Return guidance for choosing the onboarding step count; does not change any file.
 
-    Usage: call this tool to ask the user how many onboarding steps they want,
-    show the returned guidance, let them choose. Then during scaffold, the
-    OnboardingStep array in Views.swift is written by hand with the chosen count
-    and app-specific content (following the per-screen Claude Design boards) — this tool
-    just clarifies the decision point and doesn't modify files.
-
-    STANDARD: onboarding is a quiz-style Q&A with ~5 personalization questions
-    (OnboardingStep.kind=.question), so new apps match that count (~5), not "at least one".
-    """
+    Use when: deciding onboarding length with the user (quiz-style flow with about 5 personalization questions
+    is the standard).
+    Returns: {ok, step_count, ranges: {"8-10"|"11-13"|"14-15": description}, warning?}."""
     # STANDARD: every app's onboarding is a quiz-style Q&A flow with ~5 questions
     # (e.g. count/type/occasion/style/attribution): ~5 personalization questions are
     # MANDATORY, not "at least one". Kind = {info, question, emotional, loading, finale} — rich multi-type.
@@ -805,30 +914,32 @@ def onboarding_plan(step_count: int = 12) -> dict[str, Any]:
 @tool
 def animation_fetch_recolor(app_dir: str, slot: str, primary_hex: str, accent_hex: str,
                             keyword: str | None = None) -> dict[str, Any]:
-    """Fetch a CUTE app-specific Lottie animation + recolor it to the palette → Resources/Animations/<slot>.json.
+    """Fetch a cute Lottie animation from the free LottieFiles library and recolor it to the app palette into
+    Resources/Animations/<slot>.json.
 
-    Source: the free LottieFiles library (Simple License = commercial OK, no attribution). The most-viewed
-    match is picked and its colors are mapped to the app palette (dominant→primary, others→accent, black/white kept).
-    Build-time recolor — NO runtime color code in Swift; lottie-spm renders it with `.named(slot)`.
-    slot: loading | success | empty | onboarding_hero. keyword: app-themed override (e.g. 'happy dog celebration').
-    primary_hex/accent_hex: DS.Palette light hex ('#' optional, e.g. '006A63'). Called for every slot of every app."""
+    Use when: once per slot (loading, success, empty, onboarding_hero) for every app; rendered by lottie-spm
+    with .named(slot). Colors are mapped at build time (dominant to primary, others to accent).
+    Returns: {ok, path, source, colors}."""
     return anim_mod.fetch_recolor(app_dir, slot, primary_hex, accent_hex, keyword)
 
 
 @tool
 def metadata_check(source_md: str) -> dict[str, Any]:
-    """Validate apple-metadata.md (fields + character limits). No writes."""
+    """Validate an apple-metadata.md file: required fields and character limits (no writes).
+
+    Use when: checking a single metadata file. For the store listing.json use metadata_listing_check; for the
+    ASO outputs folder use aso_validate_metadata.
+    Returns: {ok, problems: [...], locales}."""
     return meta_mod.check(source_md)
 
 
 @tool
 def metadata_export(source_md: str, dest_dir: str, support_url: str | None = None, privacy_url: str | None = None, app_dir: str | None = None, primary_category: str | None = None, secondary_category: str | None = None) -> dict[str, Any]:
-    """apple-metadata.md → fastlane/metadata/<locale>/*.txt (validated).
+    """Export apple-metadata.md to fastlane/metadata/<locale>/*.txt after validation.
 
-    If app_dir is given the ASO gate applies: export is refused until ASO is complete.
-    primary/secondary_category = appCategories id (e.g. PHOTO_AND_VIDEO, PRODUCTIVITY) → written to the
-    root *.txt files; deliver_metadata pushes them to ASC. Photo/portrait app default: PHOTO_AND_VIDEO+PRODUCTIVITY.
-    """
+    Use when: preparing metadata for deliver_metadata. With app_dir set, refuses until the ASO stage is
+    complete. Not for: uploading to App Store Connect (use deliver_metadata).
+    Returns: {ok, written: [files], locales} or a gate refusal."""
     if app_dir:
         gate = pipe_mod.require_done(app_dir, "aso")
         if gate:
@@ -839,51 +950,61 @@ def metadata_export(source_md: str, dest_dir: str, support_url: str | None = Non
 # ---- aso_* ----
 @tool
 def aso_check_name(name: str, country: str = "us") -> dict[str, Any]:
-    """Is the App Store name (globally unique) available — iTunes Search exact-name collision. Call BEFORE asc_create_app."""
+    """Check whether an App Store app name is free, by exact-name collision in iTunes Search.
+
+    Use when: testing one name before asc_create_app. For several names use aso_find_available_name.
+    Returns: {ok, name, available, conflicts: [...]}."""
     return aso_mod.check_name_available(name, country)
 
 
 @tool
 def aso_find_available_name(candidates: list[str], country: str = "us") -> dict[str, Any]:
-    """Pick the first AVAILABLE App Store name from the candidates (a taken name gets the submit rejected)."""
+    """Pick the first available App Store name from a candidate list.
+
+    Use when: you have ordered name options; a taken name gets a submission rejected. For one name use
+    aso_check_name.
+    Returns: {ok, name, checked: [...]} or {ok: false} if none is free."""
     return aso_mod.find_available_name(candidates, country)
 
 
 @tool
 def aso_fetch_competitors(term: str, country: str = "us", limit: int = 10) -> dict[str, Any]:
-    """Fetch competitor apps via iTunes Search (LIVE, read-only)."""
+    """Fetch competitor apps for a search term through iTunes Search (live, read-only).
+
+    Use when: sizing up a niche or getting trackIds for aso_competitor_iap. For a scored go/no-go use
+    aso_niche_score.
+    Returns: {ok, count, apps: [{trackId, name, ratings, price, ...}]} (untrusted_content)."""
     return aso_mod.fetch_competitors(term, country, limit)
 
 
 @tool
 def aso_top_grossing(country: str = "us", limit: int = 25, genre: str | None = None) -> dict[str, Any]:
-    """Top-grossing apps (revenue proxy) — proven-idea hunting. genre: any App Store category name from
-    aso.GENRES (books, business, developer_tools, education, entertainment, finance, food_drink, games,
-    graphics_design, health, lifestyle, medical, music, navigation, news,
-    photo_video, productivity, reference, shopping, social, sports, travel, utilities, weather) or its
-    genre id; None = overall chart. An ignored genre filter returns ok:False, never the overall chart."""
+    """List the top-grossing apps of a storefront and optional category as a revenue proxy.
+
+    Use when: hunting proven ideas in one category. To sweep all categories and storefronts use idea_harvest. An
+    unknown genre returns ok:false, never the overall chart.
+    Returns: {ok, apps: [...]} (untrusted_content)."""
     return aso_mod.top_grossing(country, limit, genre)
 
 
 @tool
 def aso_search_hints(term: str, country: str = "us", expand: bool = False) -> dict[str, Any]:
-    """App Store autocomplete = REAL search demand (free, no auth). IDEA-STAGE HARD GATE.
+    """Query App Store autocomplete for real search demand; the idea-stage hard gate (0 suggestions for a real term
+    = no demand, reject).
 
-    Returns suggestions in Apple's own popularity order. 0 suggestions for a real term = no demand
-    → REJECT the idea. expand=True appends a–z to the seed and collects the keyword universe (ASO keyword research).
-    An endpoint error returns ok:False (NOT an empty list) — a broken endpoint must not be read as 'no competitors'."""
+    Use when: validating an idea or expanding keywords (expand=true appends a-z). An endpoint error returns
+    ok:false, never an empty list.
+    Returns: {ok, term, suggestions: [...], count} (untrusted_content)."""
     return aso_mod.search_hints(term, country, expand)
 
 
 @tool
 def aso_niche_score(term: str, country: str = "us", genre: str | None = None) -> dict[str, Any]:
-    """Idea go/no-go score: demand + competitor weakness + saturation penalty + monetization (0-100).
+    """Score an idea 0-100 from demand, competitor weakness, saturation and monetization, with a go/no-go verdict.
 
-    HARD GATE: 0 autocomplete suggestions = REJECT. Competitor metrics from iTunes Search top 50 (country PINNED —
-    userRatingCount is per storefront). Saturation penalty: the score drops if the median competitor is strong.
-    genre: any App Store category (aso.GENRES) — the category's AI density is INFORMATIONAL only (AI is an
-    optional edge, never required nor penalized; not part of the score).
-    verdict: GO(≥60) | MAYBE(≥40) | WEAK | REJECT(median>50k or no demand)."""
+    Use when: ranking one idea quickly. For the full evidence bundle use idea_evaluate. verdict: GO (>=60),
+    MAYBE (>=40), WEAK, REJECT (median competitor >50k ratings or no demand).
+    Returns: {ok, score, verdict, demand, competitors, ...} (untrusted_content)."""
     return aso_mod.niche_score(term, country, genre)
 
 
@@ -892,34 +1013,36 @@ def aso_niche_score(term: str, country: str = "us", genre: str | None = None) ->
 def idea_harvest(countries: list[str] | None = None, genres: list[str] | None = None, limit: int = 100,
                  newcomer_months: int = 12, exclude_terms: list[str] | None = None,
                  feeds: list[str] | None = None, max_results: int = 50) -> dict[str, Any]:
-    """Phase 0 idea harvest across EVERY App Store category and storefront (not only AI/photo apps).
+    """Sweep top-grossing and top-free charts across every App Store category and storefront to find proven and
+    rising ideas.
 
-    Sweeps top-grossing + top-free (legacy RSS) per genre × storefront (default us, gb, de, br, tr, jp, fr;
-    genres None = all 24 charted categories), dedupes, enriches via iTunes lookup (release date, ratings,
-    price) and returns chart_proven (top-grossing), rising_newcomers (released ≤ newcomer_months, sorted by
-    ratings/day) and per-genre clusters (open_niche: open|some|closed|unmeasured). Read-only, free,
-    paced (~0.3 s/request; a full default sweep takes ~1.5 min). A failed feed is listed in failed_feeds (ok:False)
-    — never read as "no apps". exclude_terms drops the founder's own apps (name/seller match)."""
+    Use when: Phase 0 idea generation (about 1.5 minutes for the default sweep). Not for: evaluating one idea
+    (use idea_evaluate) or a single chart (use aso_top_grossing). Failed feeds are listed, never read as no
+    apps.
+    Returns: {ok, chart_proven, rising_newcomers, clusters: [{genre, open_niche}], failed_feeds}
+    (untrusted_content)."""
     return ideas_mod.harvest(countries, genres, limit, newcomer_months, exclude_terms, feeds, max_results)
 
 
 @tool
 def idea_evaluate(term: str, country: str = "us", genre: str | None = None,
                   name_candidates: list[str] | None = None, leaders: int = 3) -> dict[str, Any]:
-    """Evidence bundle to rank one idea (any category): autocomplete count, niche score/verdict,
-    two-window newcomer traction (12 + 6 months), leaders with price ladders, ai_needed
-    (yes|optional|no heuristic + claude_assessment for Claude to set), build_complexity (low|medium|high
-    vs the template), review_risk by genre/term, and the first available name from name_candidates.
-    genre None = inferred from the competitors."""
+    """Build the evidence bundle to rank one idea in any category.
+
+    Use when: comparing shortlisted ideas after idea_harvest. Not for: a quick score only (use aso_niche_score).
+    Includes ai_needed and build_complexity heuristics for Claude to judge.
+    Returns: {ok, autocomplete, niche, newcomers, leaders, ai_needed, build_complexity, review_risk,
+    available_name} (untrusted_content)."""
     return ideas_mod.evaluate(term, country, genre, name_candidates, leaders)
 
 
 @tool
 def aso_competitor_iap(app_id: str, country: str = "us") -> dict[str, Any]:
-    """Competitor's subscription/IAP price ladder (from the App Store product page). Input to the pricing decision.
+    """Fetch a competitor's subscription/IAP price ladder from its App Store product page.
 
-    iTunes lookup does not expose IAPs; the product page embeds them. app_id = iTunes trackId (returned by aso_fetch_competitors).
-    FRAGILE (undocumented): on failure ok:False + prices:None — ABSENCE means 'unknown', NOT 'free'."""
+    Use when: setting our pricing. app_id is the iTunes trackId from aso_fetch_competitors. Fragile,
+    undocumented source: on failure ok:false and prices null mean unknown, not free.
+    Returns: {ok, prices: [{name, price}] | null} (untrusted_content)."""
     return aso_mod.competitor_iap(app_id, country)
 
 
@@ -927,74 +1050,105 @@ def aso_competitor_iap(app_id: str, country: str = "us") -> dict[str, Any]:
 def aso_unit_economics(weekly_price: float = 7.99, yearly_price: float = 49.99,
                        weekly_credits: int = 10, yearly_monthly_credits: int = 15,
                        ai_cost_per_credit: float = 0.003, apple_cut: float = 0.15) -> dict[str, Any]:
-    """Unit economics: credit count × AI cost vs subscription revenue → margin, break-even, warnings.
+    """Compute margin, break-even and warnings from prices, credits and AI cost (pure calculation, no network).
 
-    Grounds the price + credit decision in data at the idea/scaffold stage (the yearly_credits/weekly_credits
-    passed to app_scaffold are validated here). apple_cut: Small Business 15% (default), otherwise 0.30."""
+    Use when: idea/scaffold stage pricing decisions. Not for: measured-cost economics for a built app (use
+    pricing_unit_economics). apple_cut is 0.15 for Small Business, else 0.30.
+    Returns: {ok, weekly, yearly, margins, break_even, warnings}."""
     return aso_mod.unit_economics(weekly_price, yearly_price, weekly_credits,
                                   yearly_monthly_credits, ai_cost_per_credit, apple_cut)
 
 
 @tool
 def aso_scaffold_outputs(app_name: str, base_dir: str, locales: list[str] | None = None) -> dict[str, Any]:
-    """Create the outputs/<App>/ skeleton (including apple-metadata.md, 32 languages)."""
+    """Create the outputs/<App>/ ASO skeleton including apple-metadata.md in 32 languages.
+
+    Use when: standalone ASO work. Inside the pipeline use aso_run, which also returns the skill instructions.
+    Returns: {ok, dir, files}."""
     return aso_mod.scaffold_outputs(app_name, base_dir, locales)
 
 
 @tool
 def aso_validate_metadata(app_name: str, base_dir: str) -> dict[str, Any]:
-    """Validate outputs/<App>/02-metadata/apple-metadata.md."""
+    """Validate outputs/<App>/02-metadata/apple-metadata.md (fields and character limits).
+
+    Use when: checking ASO output by app name and base dir. For an arbitrary file use metadata_check; to mark
+    the stage done use aso_complete.
+    Returns: {ok, problems: [...]}."""
     return aso_mod.validate_metadata(app_name, base_dir)
 
 
 @tool
 def aso_run(app_dir: str) -> dict[str, Any]:
-    """Start the ASO stage (mandatory step): outputs skeleton + skill instructions."""
+    """Start the mandatory ASO stage: create the outputs skeleton and return the skill instructions.
+
+    Use when: the pipeline reaches ASO. Finish with aso_complete.
+    Returns: {ok, outputs_dir, instructions}."""
     return pipe_mod.aso_run(app_dir)
 
 
 @tool
 def aso_complete(app_dir: str) -> dict[str, Any]:
-    """Validate the ASO output + mark the 'aso' stage done (opens the metadata/deliver gate)."""
+    """Validate the ASO output and mark the 'aso' stage done, opening the metadata/deliver gate.
+
+    Use when: ASO files are written. Not for: other stages (use pipeline_mark).
+    Returns: {ok, problems?} or a refusal listing what is missing."""
     return pipe_mod.aso_complete(app_dir)
 
 
 # ---- icon_* ----
 @tool
 def icon_install(app_dir: str, source: str = "design/icon.png") -> dict[str, Any]:
-    """Install the Claude Design app icon: the 1024×1024 master exported from B01-AppIcon.dc.html
-    (design_export_png → design/icon.png), already uploaded + recorded (design_record_upload) →
-    AppIcon.appiconset (alpha flattened) + .appfactory/verify/icon.json (the icon gate requires it)."""
+    """Install the Claude Design app icon (1024x1024 master) into AppIcon.appiconset and write
+    .appfactory/verify/icon.json.
+
+    Use when: after design_export_png produced design/icon.png and design_record_upload recorded the upload; the
+    icon gate requires it. Alpha is flattened.
+    Returns: {ok, icon, marker} or an error naming the missing/invalid master."""
     return icon_mod.install(app_dir, source)
 
 
 @tool
 def icon_generate(app_dir: str, concept: str, extra: str = "", allow_external_generator: bool = False) -> dict[str, Any]:
-    """OPT-IN ONLY (spend → approval): fal raster DRAFT → design/icon_drafts/ as reference for the Claude
-    Design icon board. Never installs an icon — the shipped icon comes from Claude Design (icon_install)."""
+    """Generate a fal.ai raster icon DRAFT into design/icon_drafts/ as reference for the Claude Design icon board
+    (paid, opt-in only).
+
+    Use when: the user explicitly allows an external generator. Never installs an icon; the shipped icon comes
+    from Claude Design (icon_install).
+    Returns: {ok, draft, prompt, next} or a refusal unless allow_external_generator is true."""
     return icon_mod.generate(app_dir, concept, extra, allow_external_generator)
 
 
 # ---- localize_* ----
 @tool
 def localize_apply(app_dir: str, translations: dict[str, dict[str, str]]) -> dict[str, Any]:
-    """Merge translations into the in-app String Catalog for the spec's locales.app
-    (translations = {english_key: {locale: value}}; other locales are ignored)."""
+    """Merge translations into the in-app String Catalog for the spec's app locales.
+
+    Use when: after translating UI strings; locales not in spec locales.app are ignored. Not for: store listing
+    copy (use metadata_render_listing / deliver_metadata).
+    Returns: {ok, locales, keys, missing}."""
     return loc_mod.build_catalog(app_dir, translations)
 
 
 # ---- pipeline_* ----
 @tool
 def pipeline_status(app_dir: str) -> dict[str, Any]:
-    """App pipeline status: which stages are done/pending, and what comes next."""
+    """Show which pipeline stages are done or pending and what comes next.
+
+    Use when: checking progress of one app. To get the next instructions use pipeline_next; for the autonomous
+    loop use orchestrator_next_action.
+    Returns: {ok, stages: {stage: status}, next}."""
     return pipe_mod.status(app_dir)
 
 
 @tool
 def pipeline_next(app_dir: str, skip_options_check: bool = False) -> dict[str, Any]:
-    """Return the next mandatory step + its instructions (driver). Refuses until the run options are
-    confirmed (run_options → run_options_save) unless skip_options_check=true. Returns setup_required first
-    when AppFactory is not set up yet."""
+    """Return the next mandatory pipeline step with its instructions.
+
+    Use when: driving the pipeline manually. Refuses until run options are confirmed (run_options,
+    run_options_save) unless skip_options_check. Not for: the autonomous loop with retry budgets (use
+    orchestrator_next_action).
+    Returns: {ok, stage, instructions} or setup_required / options-not-confirmed errors."""
     if (need := setup_tools.required()):
         return need
     if not skip_options_check and not options_mod.confirmed(app_dir):
@@ -1004,25 +1158,32 @@ def pipeline_next(app_dir: str, skip_options_check: bool = False) -> dict[str, A
 
 @tool
 def pipeline_mark(app_dir: str, stage: str, status: str = "done") -> dict[str, Any]:
-    """Mark a stage (done/in_progress/pending)."""
+    """Set a pipeline stage's status (done, in_progress, pending) in the app manifest.
+
+    Use when: recording progress. Marking done runs the stage's enforced gate. To only test the gate use
+    pipeline_validate.
+    Returns: {ok, stage, status} or a gate refusal."""
     return pipe_mod.mark(app_dir, stage, status)
 
 
 @tool
 def pipeline_validate(app_dir: str, stage: str) -> dict[str, Any]:
-    """Run a stage's enforced gate WITHOUT modifying the manifest.
+    """Run a stage's enforced gate without modifying the manifest.
 
-    For orchestrator/subagent self-checks: does the gate pass before marking it 'done'?
-    """
+    Use when: self-checking before pipeline_mark(done). Read-only.
+    Returns: {ok, stage, problems: [...]}."""
     return pipe_mod.validate(app_dir, stage)
 
 
 # ---- orchestrator_* (autonomous driver brain) ----
 @tool
 def orchestrator_preflight(app_dir: str | None = None, skip_options_check: bool = False) -> dict[str, Any]:
-    """Pre-flight for an autonomous run: run options confirmed + config keys + fastlane session
-    freshness + caffeinate command. Ready if blockers is empty. Returns setup_required first when AppFactory
-    is not set up yet."""
+    """Pre-flight for an autonomous run: run options confirmed, config keys present, fastlane session fresh,
+    caffeinate command.
+
+    Use when: before starting the orchestrator_next_action loop. Ready when blockers is empty. Returns
+    setup_required first if AppFactory is not set up.
+    Returns: {ok, blockers: [...], caffeinate, ...}."""
     if (need := setup_tools.required()):
         return need
     if not skip_options_check and not options_mod.confirmed(app_dir):
@@ -1032,9 +1193,11 @@ def orchestrator_preflight(app_dir: str | None = None, skip_options_check: bool 
 
 @tool
 def orchestrator_next_action(app_dir: str, skip_options_check: bool = False) -> dict[str, Any]:
-    """Next action for the driver loop: stage + subagent role + retry budget +
-    instructions. done=True means the pipeline is finished (submit needs human approval).
-    Refuses until the run options are confirmed unless skip_options_check=true; setup_required comes first."""
+    """Return the next action for the autonomous driver loop: stage, subagent role, retry budget and instructions.
+
+    Use when: running unattended. done=true means the pipeline is finished (submit still needs human approval).
+    For a manual step use pipeline_next.
+    Returns: {ok, done, stage, role, attempts_left, instructions}."""
     if (need := setup_tools.required()):
         return need
     if not skip_options_check and not options_mod.confirmed(app_dir):
@@ -1045,26 +1208,31 @@ def orchestrator_next_action(app_dir: str, skip_options_check: bool = False) -> 
 # ---- run options (ask the user about every optional part before any work) ----
 @tool
 def run_options(app_dir: str | None = None) -> dict[str, Any]:
-    """Every optional part of a run (services, monetization, trial, paywalls, onboarding quiz, mascot,
-    languages, store locales, screenshots, preview video, CPPs, analytics, ratings, HealthKit, Sign in with
-    Apple, GitHub issues, e2e smoke tests…) with its question, kind, choices, default and current value.
-    Ask the user each question one at a time (or as a compact checklist if the agent supports multi-select),
-    then call run_options_save. Call this BEFORE any other work when the user says run."""
+    """List every optional part of a run with its question, kind, choices, default and current value.
+
+    Use when: BEFORE any other work when the user says run. Ask the user each question one at a time (or as a
+    checklist), then call run_options_save.
+    Returns: {ok, options: [{id, question, kind, choices, default, value}], confirmed}."""
     return options_mod.listing(app_dir)
 
 
 @tool
 def run_options_save(answers: dict[str, Any], app_dir: str | None = None) -> dict[str, Any]:
-    """Save the user's answers ({option id: value}, every id from run_options). Validates types, choices
-    and dependencies; services go to config.toml, the rest to app.spec.json (app_dir) or to a pending file
-    app_scaffold applies. Records options_confirmed."""
+    """Save the user's answers to the run options and mark options confirmed.
+
+    Use when: after asking every question from run_options. Validates types, choices and dependencies; services
+    go to config.toml, the rest to app.spec.json (or a pending file that app_scaffold applies).
+    Returns: {ok, saved, errors?}."""
     return options_mod.save(answers, app_dir)
 
 
 @tool
 def orchestrator_record_attempt(app_dir: str, stage: str) -> dict[str, Any]:
-    """Count a failed attempt of a stage (after a gate failure).
-    Returns: {stage, attempts, should_retry}."""
+    """Count one failed attempt of a stage after a gate failure.
+
+    Use when: a stage gate failed in the autonomous loop; escalate with orchestrator_needs_human when
+    should_retry is false.
+    Returns: {ok, stage, attempts, should_retry}."""
     n = orch_mod.record_attempt(app_dir, stage)
     return {"ok": True, "stage": stage, "attempts": n,
             "should_retry": orch_mod.should_retry(app_dir, stage)}
@@ -1073,88 +1241,116 @@ def orchestrator_record_attempt(app_dir: str, stage: str) -> dict[str, Any]:
 @tool
 def orchestrator_needs_human(app_dir: str, stage: str, reason: str,
                              how_to_resolve: str) -> dict[str, Any]:
-    """Self-correction exhausted: write NEEDS_HUMAN.md and return its path."""
+    """Write NEEDS_HUMAN.md when self-correction is exhausted and return its path.
+
+    Use when: a stage keeps failing and only the human can unblock it (stop the loop afterwards).
+    Returns: {ok, path}."""
     return {"ok": True, "path": orch_mod.write_needs_human(app_dir, stage, reason, how_to_resolve)}
 
 
 # ---- screenshot_* ----
 @tool
 def screenshot_capture(udid: str, marketing_dir: str, locale: str, name: str) -> dict[str, Any]:
-    """Raw capture from the booted simulator → marketing/raw/<locale>/<name>.png."""
+    """Capture a raw screenshot from the booted simulator into marketing/raw/<locale>/<name>.png.
+
+    Use when: capturing a single screen manually. For the full localized set use screenshot_build_all.
+    Returns: {ok, path}."""
     return ss_mod.capture(udid, marketing_dir, locale, name)
 
 
 @tool
 def screenshot_brand(marketing_dir: str) -> dict[str, Any]:
-    """Branded App Store screenshots via the node compositor, rendering the Claude Design store layout
-    (run screenshot_apply_layout first; screenshot_build_all does both)."""
+    """Render branded App Store screenshots with the node compositor using the Claude Design store layout.
+
+    Use when: raw captures exist; run screenshot_apply_layout first (screenshot_build_all does both).
+    Returns: {ok, rendered: count, dir}."""
     return ss_mod.brand(marketing_dir)
 
 
 @tool
 def screenshot_apply_layout(app_dir: str) -> dict[str, Any]:
-    """Merge the Claude Design store layout (design/project/store_layout.json, the ST0N boards) into
-    marketing/screenshots/config.json so the compositor renders the approved layout for every locale."""
+    """Merge the Claude Design store layout (design/project/store_layout.json) into
+    marketing/screenshots/config.json.
+
+    Use when: before screenshot_brand so every locale renders the approved layout.
+    Returns: {ok, config path, boards}."""
     from .design import brand
     return brand.apply_layout(app_dir)
 
 
 @tool
 def screenshot_sync(marketing_dir: str, fastlane_screenshots_dir: str) -> dict[str, Any]:
-    """branded → fastlane/screenshots/<locale>/."""
+    """Copy branded screenshots into fastlane/screenshots/<locale>/.
+
+    Use when: after screenshot_brand, before deliver_screenshots. Local only; nothing is uploaded.
+    Returns: {ok, synced: count}."""
     return ss_mod.sync(marketing_dir, fastlane_screenshots_dir)
 
 
 @tool
 def screenshot_build_all(app_dir: str, project: str, scheme: str, bundle_id: str,
                          sample_prompt: str, udid: str, locales: list[str] | None = None) -> dict[str, Any]:
-    """MANDATORY turnkey screenshot step (UI-test style, all apps): generate a sample image →
-    build+install → localized captions from the catalog → capture 32 languages × 6 rich screens (onboarding/create/
-    result/gallery/paywall/settings) → brand → sync to fastlane/screenshots.
-    sample_prompt: a sample prompt for what the app produces (fills Result/Gallery with real output)."""
+    """Run the whole turnkey screenshot step: sample image, build and install, captions, capture 32 languages x 6
+    screens, brand, sync to fastlane/screenshots.
+
+    Use when: the mandatory screenshots stage. Not for: single captures (use screenshot_capture) or uploading
+    (use deliver_screenshots). Long-running.
+    Returns: {ok, locales, screens, dir} or the first failing step."""
     return ss_mod.build_all(app_dir, project, scheme, bundle_id, sample_prompt, udid, locales)
 
 
 @tool
 def screenshot_generate_sample(app_dir: str, prompt: str) -> dict[str, Any]:
-    """Generate a sample image with fal.ai → Resources/sample_headshot.jpg (enriches Result/Gallery)."""
+    """Generate a sample image with fal.ai into Resources/sample_headshot.jpg to fill the Result/Gallery screens
+    (paid).
+
+    Use when: screenshots need real-looking app output; screenshot_build_all calls it for you.
+    Returns: {ok, path}."""
     return ss_mod.generate_sample(app_dir, prompt)
 
 
 @tool
 def screenshot_onboarding_heroes(app_dir: str, concept: str, count: int = 11,
                                  allow_external_generator: bool = False) -> dict[str, Any]:
-    """LEGACY, OPT-IN ONLY: fal hero images per onboarding step (onb_step0..N). Onboarding visuals are
-    designed in Claude Design (design/screens.json boards); use this only for a legacy hero-image onboarding."""
+    """LEGACY, opt-in: generate fal hero images per onboarding step (onb_step0..N).
+
+    Use when: only for a legacy hero-image onboarding. Onboarding visuals normally come from Claude Design
+    boards. Requires allow_external_generator=true.
+    Returns: {ok, images: [paths]} or a refusal."""
     return ss_mod.generate_onboarding_heroes(app_dir, concept, count, allow_external_generator)
 
 
 # ---- growth_* (post-launch viral content; NO Postbridge, free) ----
 @tool
 def growth_build_slideshows(app_dir: str, slideshows: list[dict]) -> dict[str, Any]:
-    """Render viral TikTok/Reels slideshows (SlideSmith pattern, free, no scheduling).
-    CLAUDE writes the hooks/slide text; images are generated with the app's AI (fal).
-    slideshows=[{name, slides:[{text, image_prompt? or image?, cta?}]}]. Output 1080x1920,
-    marketing/growth/<name>/NN.png — ready to share. A step for AFTER the app is submitted."""
+    """Render viral TikTok/Reels slideshows (1080x1920 PNGs) to marketing/growth/<name>/NN.png.
+
+    Use when: post-launch content only, after the app is submitted. You write the hooks and slide text; images
+    come from the app's AI (fal). No scheduling.
+    Returns: {ok, sets: [{name, slides, ok, dir}]}."""
     return growth_mod.build_slideshows(app_dir, slideshows)
 
 
 # ---- preview_* (App Store App Preview: Claude-authored from real simulator recordings) ----
 @tool
 def preview_brief(app_dir: str, message: str = "", overwrite: bool = False) -> dict[str, Any]:
-    """Write marketing/preview/BRIEF.md — the HyperFrames brief (destination: app-store-preview) for this
-    app's App Preview, from app.spec.json (size, fps, duration, poster, locales and shares), and create
-    marketing/preview/recordings/<locale>/. Then record the real app (Scripts/sim_store_prep.sh, then
-    `xcrun simctl io <udid> recordVideo`) and author the video with the `hyperframes` skill: real
-    footage only, motion graphics frame and highlight it."""
+    """Write marketing/preview/BRIEF.md (the HyperFrames App Preview brief) from app.spec.json and create the
+    recordings folders.
+
+    Use when: starting the App Preview video. Then record the real app and author the video with the hyperframes
+    skill (real footage only). Check with preview_check.
+    Returns: {ok, brief path, recordings dirs}."""
     return preview_mod.brief(app_dir, message, overwrite)
 
 
 @tool
 def preview_check(app_dir: str) -> dict[str, Any]:
-    """Offline readiness of the App Preview set: BRIEF, real recordings per source locale, one preview per
-    spec.preview locale (or a documented share), every file 886x1920 / <=30 fps / H.264 / 15–30 s /
-    <=500 MB / stereo AAC or silent (ffprobe), plus the self-review status and deterministic rendering."""
+    """Check offline readiness of the App Preview set: brief, recordings, one preview per locale, ffprobe specs,
+    self-review status.
+
+    Use when: before preview_upload. Files must be 886x1920, <=30 fps, H.264, 15-30 s, <=500 MB, stereo AAC or
+    silent.
+    Returns: {ok, problems: [...], plan}."""
     chk = preview_mod.check(app_dir)
     review = preview_mod.review_status(app_dir)
     return {"ok": chk["ok"] and review["ok"], "problems": chk["problems"] + review["problems"], "plan": chk["plan"]}
@@ -1162,28 +1358,33 @@ def preview_check(app_dir: str) -> dict[str, Any]:
 
 @tool
 def preview_review_sheets(app_dir: str) -> dict[str, Any]:
-    """Self-review material for every final preview (ffmpeg): a contact sheet (fps=2, 270 px, 6x5), a
-    phone-size sheet (fps=1, 360 px, 5x3) and a 12-frame strip around the fastest transition, in
-    marketing/preview/review/<locale>/. Open them and score with preview_review_log."""
+    """Generate self-review material (contact sheet, phone-size sheet, transition strip) for every final preview
+    with ffmpeg.
+
+    Use when: reviewing a rendered preview; open the sheets, score them, then call preview_review_log.
+    Returns: {ok, sheets: {locale: [paths]}}."""
     return preview_mod.review_sheets(app_dir)
 
 
 @tool
 def preview_review_log(app_dir: str, file: str, scores: dict, problems: list[dict] | None = None) -> dict[str, Any]:
-    """Log one self-review round of a final preview (file relative to the app): scores 1–10 for hook,
-    readability, motion, variety, brand, music; while any is under 8, the 3 worst problems with
-    timestamps [{t, issue}]. Fix, re-render, re-review until every score is 8+ on the exact final file
-    (MD5-matched) — preview_upload and the gate refuse otherwise."""
+    """Log one self-review round (scores 1-10 and worst problems) for a final preview file.
+
+    Use when: after preview_review_sheets. Every score must reach 8+ on the exact final file (MD5-matched) or
+    preview_upload and the gate refuse.
+    Returns: {ok, passed, scores, problems}."""
     return preview_mod.log_review(app_dir, file, scores, problems or [])
 
 
 @tool
 def preview_upload(app_dir: str, dry_run: bool = True, replace: bool = False,
                    locales: list[str] | None = None, approval_id: str | None = None) -> dict[str, Any]:
-    """Upload fastlane/app_previews/<locale>/ to the editable version's IPHONE_67 preview sets through the
-    asc CLI (shares from spec.preview.shared resolved, poster time code from the spec, MD5-idempotent).
-    dry_run=True (default) sends nothing; a live upload needs human approval; refuses while preview_check
-    has problems."""
+    """Upload fastlane/app_previews/<locale>/ to the editable version's iPhone preview sets via the asc CLI (needs
+    human approval unless dry_run).
+
+    Use when: preview_check is clean and self-review passed. dry_run=true (default) sends nothing.
+    MD5-idempotent; refuses while preview_check has problems.
+    Returns: {ok, uploaded/planned: [...], dry_run} or an approval_required refusal."""
     if dry_run:
         return preview_mod.upload(app_dir, confirm="", replace=replace, locales=locales)
     refused = _approval("preview_upload", {"app_dir": app_dir, "replace": replace, "locales": locales}, approval_id)
@@ -1195,9 +1396,11 @@ def preview_upload(app_dir: str, dry_run: bool = True, replace: bool = False,
 # ---- cpp_* (Custom Product Pages; one per Search Ads theme) ----
 @tool
 def cpp_build_all(bundle_id: str, themes: list[dict], approval_id: str | None = None) -> dict[str, Any]:
-    """Create one CPP per Search Ads theme (create→version→localization) + return the deep-link URLs.
-    themes=[{name, locale?}] from the theme/keyword clusters in the ASO output. The URLs feed Ad Ops.
-    LIVE writes: human approval."""
+    """Create one Custom Product Page per Search Ads theme (page, version, localization) and return the deep-link
+    URLs (live write, needs human approval).
+
+    Use when: after ASO produced theme clusters; the URLs feed Ad Ops.
+    Returns: {ok, pages: [{theme, ok, id, version_id, localization_id, url}]} or an approval_required refusal."""
     refused = _approval("cpp_build_all", {"bundle_id": bundle_id, "themes": themes}, approval_id)
     if refused:
         return refused
@@ -1214,7 +1417,12 @@ def cpp_build_all(bundle_id: str, themes: list[dict], approval_id: str | None = 
 # ---- deliver_* (asc CLI → ASC draft; no submit) ----
 @tool
 def deliver_metadata(app_dir: str, bundle_id: str, approval_id: str | None = None) -> dict[str, Any]:
-    """Upload metadata to the ASC draft — DIRECT API (bypasses the fastlane 'No data' bug). ASO-gated."""
+    """Upload metadata to the App Store Connect draft version through the API (live write, needs human approval,
+    ASO-gated).
+
+    Use when: metadata files are exported (metadata_export). Not for: screenshots (deliver_screenshots) or the
+    submit step (asc_submit_for_review).
+    Returns: {ok, uploaded: [...]} or a gate / approval_required refusal."""
     gate = pipe_mod.require_done(app_dir, "aso")
     if gate:
         return gate
@@ -1226,9 +1434,12 @@ def deliver_metadata(app_dir: str, bundle_id: str, approval_id: str | None = Non
 
 @tool
 def deliver_screenshots(app_dir: str, bundle_id: str, approval_id: str | None = None) -> dict[str, Any]:
-    """Upload screenshots to the ASC draft — checksum-based INCREMENTAL sync (NOT fastlane).
-    Skips when local MD5 == ASC sourceFileChecksum; uploads only missing/changed ones → fast + reliable
-    (fastlane was randomly dropping images). Gated on screenshots: run screenshot_build_all first."""
+    """Upload screenshots to the App Store Connect draft with checksum-based incremental sync (live write, needs
+    human approval).
+
+    Use when: screenshot_build_all is done; unchanged files (MD5 match) are skipped. To verify afterwards use
+    deliver_screenshots_audit.
+    Returns: {ok, uploaded, skipped} or a gate / approval_required refusal."""
     gate = pipe_mod.require_done(app_dir, "screenshots")
     if gate:
         return gate
@@ -1240,19 +1451,22 @@ def deliver_screenshots(app_dir: str, bundle_id: str, approval_id: str | None = 
 
 @tool
 def deliver_screenshots_audit(app_dir: str, bundle_id: str) -> dict[str, Any]:
-    """Read-only screenshot readiness audit: per locale and display type (iPhone 6.9" = APP_IPHONE_67,
-    Watch = APP_WATCH_ULTRA) the ASC set holds exactly the local fastlane/screenshots files, in order,
-    all COMPLETE, each with the local file's MD5; lists the preview sets. Run after deliver_screenshots
-    and before submission. No writes."""
+    """Read-only audit that App Store Connect screenshot sets exactly match the local fastlane/screenshots files
+    (order, COMPLETE state, MD5).
+
+    Use when: after deliver_screenshots and before submission. No writes.
+    Returns: {ok, locales: {locale: {display_type: status}}, previews, problems}."""
     return deliver_mod.audit_screenshots(app_dir, bundle_id)
 
 
 @tool
 def deliver_subscription_review_screenshots(app_dir: str, bundle_id: str,
                                             approval_id: str | None = None) -> dict[str, Any]:
-    """Upload the App Review screenshot of every subscription from store/review-screenshots/<product
-    key>.png (hard paywall with real sandbox prices for the default offering, the offer paywall for
-    offer products). Without it a subscription stays MISSING_METADATA. Idempotent by MD5. Human approval."""
+    """Upload the App Review screenshot of every subscription from store/review-screenshots/<product key>.png (live
+    write, needs human approval).
+
+    Use when: subscriptions sit in MISSING_METADATA for the review screenshot. Idempotent by MD5.
+    Returns: {ok, uploaded, skipped} or an approval_required refusal."""
     refused = _approval("deliver_subscription_review_screenshots", {"app_dir": app_dir, "bundle_id": bundle_id},
                         approval_id)
     if refused:
@@ -1264,11 +1478,13 @@ def deliver_subscription_review_screenshots(app_dir: str, bundle_id: str,
 @tool
 def testflight_ship(app_dir: str, project: str, scheme: str, bundle_id: str,
                     approval_id: str | None = None) -> dict[str, Any]:
-    """End-to-end TestFlight: distribution signing → archive → App Store profiles (the app and every
-    extension in project.yml, exact bundle-id match, created right before export so Xcode's profile
-    sweep cannot delete them) → manual-signing export → `asc builds upload`. Refuses unless the
-    Maestro smoke flows passed (maestro_test; n/a when the e2e_smoke run option is off). No system keychain password
-    (temporary keychain). Never submits to App Store review — it only uploads a TestFlight build."""
+    """Build, sign and upload a TestFlight build end to end: distribution signing, archive, App Store profiles,
+    manual-signing export, asc builds upload (needs human approval).
+
+    Use when: shipping a build to TestFlight. Refuses unless the Maestro smoke flows passed (maestro_test) and
+    App ID capabilities exist. Never submits for App Store review (use asc_submit_for_review for that). Not for:
+    single build steps (build_archive, build_export_ipa, signing_*).
+    Returns: {ok, build, ...} or an error / approval_required refusal."""
     from . import store_setup as _ss
     pending = _ss.capabilities_pending(app_dir)
     if pending:  # capabilities must exist before profiles/signing (an App ID with only IAP breaks signing)
@@ -1287,7 +1503,11 @@ def testflight_ship(app_dir: str, project: str, scheme: str, bundle_id: str,
 
 @tool
 def signing_setup_distribution(approval_id: str | None = None) -> dict[str, Any]:
-    """Create a distribution cert + install it into a temporary keychain (WWDR included). {cert_id, identity, keychain}."""
+    """Create a distribution certificate and install it into a temporary keychain (WWDR included; live write, needs
+    human approval).
+
+    Use when: hand-running signing steps; testflight_ship does this for you.
+    Returns: {ok, cert_id, identity, keychain}."""
     refused = _approval("signing_setup_distribution", {}, approval_id)
     if refused:
         return refused
@@ -1296,7 +1516,11 @@ def signing_setup_distribution(approval_id: str | None = None) -> dict[str, Any]
 
 @tool
 def signing_create_profile(bundle_id: str, cert_id: str, name: str = "AppFactory AppStore", approval_id: str | None = None) -> dict[str, Any]:
-    """Create an IOS_APP_STORE provisioning profile + write it to the standard locations."""
+    """Create an IOS_APP_STORE provisioning profile and write it to the standard locations (live write, needs human
+    approval).
+
+    Use when: after signing_setup_distribution; testflight_ship does this for you.
+    Returns: {ok, profile_id, name, path}."""
     refused = _approval("signing_create_profile", {"bundle_id": bundle_id, "cert_id": cert_id, "name": name}, approval_id)
     if refused:
         return refused
@@ -1306,16 +1530,23 @@ def signing_create_profile(bundle_id: str, cert_id: str, name: str = "AppFactory
 # ---- ai_* ----
 @tool
 def ai_configure(providers: list[str] | None = None) -> dict[str, Any]:
-    """AI provider/model selection (for now fal.ai/Flux schnell — the cheapest)."""
+    """Report the AI provider/model selection (currently fal.ai Flux schnell); does not change anything.
+
+    Use when: checking which image model the backend will use. Keys are set with ai_deploy_proxy or
+    backend_deploy.
+    Returns: {ok, providers, models, note}."""
     return ai_mod.configure(providers)
 
 
 @tool
 def ai_deploy_proxy(app_dir: str, project_ref: str, daily_limit: int = 20,
                     approval_id: str | None = None) -> dict[str, Any]:
-    """Deploy the AI backend. With app.spec.json in subscription mode this is backend_deploy (the full
-    function set + migrations + secrets + auth); credits mode keeps the legacy ai-proxy deploy.
-    AI keys go only to server-side secrets. LIVE side effects: human approval."""
+    """Deploy the AI backend: the full spec-driven backend in subscription mode, or the legacy ai-proxy in credits
+    mode (live, needs human approval).
+
+    Use when: the app has an AI feature. AI keys go only to server-side secrets. For explicit dry-run planning
+    use backend_deploy.
+    Returns: {ok, deployed: [...]} or an approval_required refusal."""
     refused = _approval("ai_deploy_proxy", {"app_dir": app_dir, "project_ref": project_ref,
                                             "daily_limit": daily_limit}, approval_id)
     if refused:
@@ -1332,12 +1563,12 @@ def ai_deploy_proxy(app_dir: str, project_ref: str, daily_limit: int = 20,
 def revenuecat_setup(v2_key: str, bundle_id: str, supabase_ref: str,
                      env_suffix: str = "", set_secrets: bool = True,
                      approval_id: str | None = None) -> dict[str, Any]:
-    """Idempotently set up the RC v2 project: entitlement(premium)+4 sub attach+SDK key+secret.
+    """Idempotently set up the RevenueCat v2 project: premium entitlement, subscription attachments, SDK key and
+    Supabase secret (live write, needs human approval).
 
-    A human creates the RC project + links ASC + provides the v2 key; the rest is automatic. Preflight
-    returns NEEDS_HUMAN if there is no project. env_suffix for apps sharing one Supabase (e.g. _MYAPP).
-    LIVE RevenueCat writes: human approval.
-    """
+    Use when: after a human created the RC project, linked ASC and supplied the v2 key. Returns NEEDS_HUMAN if
+    no project exists. For ASC plus RC in one pass use store_setup.
+    Returns: {ok, entitlement, sdk_key_set, secrets} or an approval_required refusal."""
     refused = _approval("revenuecat_setup", {"v2_key": v2_key, "bundle_id": bundle_id, "supabase_ref": supabase_ref,
                                              "env_suffix": env_suffix, "set_secrets": set_secrets}, approval_id)
     if refused:
@@ -1354,9 +1585,11 @@ from . import store_setup as store_mod  # noqa: E402
 
 @tool
 def backend_render(app_dir: str) -> dict[str, Any]:
-    """Make the scaffolded backend follow app.spec.json (offline, idempotent): prune supabase/ to the
-    monetization mode, render functions/_shared/app.gen.ts + config.toml (Apple client id) + the
-    CONTRACT.md quota block, resolve/fill the legal sources, and sync listing.json locales/legal URLs."""
+    """Render the scaffolded backend from app.spec.json (offline, idempotent): prune supabase/ to the monetization
+    mode, generate shared config, legal sources and listing locales.
+
+    Use when: after editing the spec, before backend_deploy. Nothing is deployed.
+    Returns: {ok, mode, render, legal, listing?}."""
     sp = spec_mod.load(app_dir)
     out = {"mode": supa_mod.apply_backend_mode(app_dir, sp), "render": supa_mod.render_backend(app_dir, sp),
            "legal": legal_mod.render(app_dir, sp)}
@@ -1370,11 +1603,12 @@ def backend_render(app_dir: str) -> dict[str, Any]:
 @tool
 def backend_deploy(app_dir: str, project_ref: str, dry_run: bool = True,
                    approval_id: str | None = None) -> dict[str, Any]:
-    """Deploy the spec's Supabase backend (LIVE unless dry_run): migrations (tracked), secrets
-    (AI_MODEL, AI_FALLBACK_MODEL, caps, REQUIRE_CONSENT, RC_PROJECT_ID from app outputs, RC_SECRET_KEY
-    + FAL_KEY from config — reported by name only), auth (anonymous + Sign in with Apple + manual
-    linking), legal build, and the function set (analyze, usage-status, delete-account, legal,
-    rc-webhook). dry_run=true (default) returns the plan without any call; a live deploy needs human approval."""
+    """Deploy the spec's Supabase backend: migrations, secrets, auth, legal build and edge functions (live unless
+    dry_run; needs human approval).
+
+    Use when: after backend_render. dry_run=true (default) returns the plan without any call. Not for: single
+    SQL (supabase_run_sql) or one secret (supabase_set_secret).
+    Returns: {ok, plan/steps, dry_run} or an approval_required refusal."""
     if not dry_run:
         refused = _approval("backend_deploy", {"app_dir": app_dir, "project_ref": project_ref}, approval_id)
         if refused:
@@ -1384,22 +1618,30 @@ def backend_deploy(app_dir: str, project_ref: str, dry_run: bool = True,
 
 @tool
 def legal_render(app_dir: str, values: dict[str, str] | None = None) -> dict[str, Any]:
-    """Fill the legal sources (store/privacy/*.md, backend/PRIVACY.md) from the spec + config
-    (APP_NAME, CONTROLLER, SUPPORT_EMAIL, dates, trial/plan sentences) and keep/drop the
-    <!-- if:consent.health --> blocks (HealthKit section). `values` fills product placeholders."""
+    """Fill the legal sources (store/privacy/*.md, backend/PRIVACY.md) from the spec and config, keeping or
+    dropping the HealthKit block.
+
+    Use when: before legal_check. Local writes only.
+    Returns: {ok, files, placeholders_left}."""
     return legal_mod.render(app_dir, spec_mod.load(app_dir), values)
 
 
 @tool
 def legal_check(app_dir: str) -> dict[str, Any]:
-    """What still blocks publishing the legal pages (placeholders, unrendered blocks, missing languages)."""
+    """List what still blocks publishing the legal pages: placeholders, unrendered blocks, missing languages.
+
+    Use when: after legal_render, offline. For checking the live pages use legal_verify.
+    Returns: {ok, problems: [...]}."""
     return legal_mod.check(app_dir, spec_mod.load(app_dir))
 
 
 @tool
 def legal_verify(app_dir: str) -> dict[str, Any]:
-    """LIVE read-only: every privacy/terms page per app language answers 200 in that language with the
-    support email and no placeholder."""
+    """Check that every deployed privacy/terms page answers 200 in each app language with the support email and no
+    placeholder (live, read-only).
+
+    Use when: after backend_deploy. Needs supabase_url in app outputs. For offline checks use legal_check.
+    Returns: {ok, pages: [{locale, url, status, problems}]}."""
     sp = spec_mod.load(app_dir)
     url = cfg.app_outputs(app_dir).get("supabase_url")
     if not url:
@@ -1411,17 +1653,13 @@ def legal_verify(app_dir: str) -> dict[str, Any]:
 def store_setup(app_dir: str, mode: str = "plan", target: str = "all",
                 rc_apple_notification_url: str | None = None, rc_project_id: str | None = None,
                 approval_id: str | None = None) -> dict[str, Any]:
-    """Idempotent App Store Connect + RevenueCat setup from app.spec.json + listing.json.
+    """Idempotent App Store Connect and RevenueCat setup from app.spec.json and listing.json (capabilities,
+    subscriptions, prices, offers, age rating, legal URLs, RC entitlement/offerings).
 
-    mode: plan (offline) | check (live reads, simulated writes; reports CONFLICT) | apply (live writes; human
-    approval via `appfactory approve <id>`).
-    target: capabilities | asc | rc | all. Order: App ID capabilities FIRST, then ASC (grace period,
-    group + localizations, products + localizations, availability before prices, equalized USA prices,
-    price overrides, per-territory intro offers for trial products and none for offer products, age
-    rating, review contact, app info/version localizations + legal URLs, SKU check, Server
-    Notifications V2 URL), then RevenueCat (project, app, products, entitlement, offerings/packages,
-    targeting-rule placements; MCP plan when REST refuses). rc_apple_notification_url: the RevenueCat
-    dashboard's Apple Server-to-Server URL (stored in app outputs)."""
+    Use when: the standard way to set up the store side. mode: plan (offline), check (live reads, simulated
+    writes, reports CONFLICT), apply (live writes, needs human approval). Prefer this over the individual asc_*
+    write tools; asc_create_app is still separate.
+    Returns: {ok, mode, steps: [...], conflicts} or an approval_required refusal."""
     confirm = ""
     if mode == "apply":
         refused = _approval("store_setup", {"app_dir": app_dir, "target": target,
@@ -1439,32 +1677,44 @@ def store_setup(app_dir: str, mode: str = "plan", target: str = "all",
 
 @tool
 def metadata_listing_check(app_dir: str) -> dict[str, Any]:
-    """Validate store/metadata/listing.json: name/subtitle ≤30, keywords 95–100, promo ≤170, no word
-    overlap across fields or cross-indexed storefronts, description ends with the subscription
-    disclosure + Terms + Privacy links (Supabase legal, ?lang=), IAP display copy."""
+    """Validate store/metadata/listing.json: length limits, keyword rules, no word overlap, subscription disclosure
+    and legal links.
+
+    Use when: before deliver_metadata. For a bare apple-metadata.md use metadata_check.
+    Returns: {ok, problems: [...]}."""
     return meta_mod.listing_check(app_dir)
 
 
 @tool
 def metadata_render_listing(app_dir: str) -> dict[str, Any]:
-    """Sync listing.json to the spec (store locales, IAP copy slots) and fill the legal URLs."""
+    """Sync listing.json to the spec (store locales, IAP copy slots) and fill the legal URLs.
+
+    Use when: after changing the spec's store locales or products. Local writes only; verify with
+    metadata_listing_check.
+    Returns: {ok, locales, changed}."""
     return meta_mod.render_listing(app_dir, spec_mod.load(app_dir))
 
 
 @tool
 def pricing_unit_economics(app_dir: str, cost_photo: float | None = None, cost_text: float | None = None,
                            apple_cut: float = 0.15) -> dict[str, Any]:
-    """Unit economics from the MEASURED AI cost per call (latest backend/eval/results for spec.ai.model,
-    or explicit cost_photo/cost_text) × usage profiles up to the daily caps, per product; writes the
-    generated blocks of store/pricing.md (decisions, unit economics, ASC/RC layout, local prices, anchor)."""
+    """Compute unit economics from the measured AI cost per call and usage profiles, and write the generated blocks
+    of store/pricing.md.
+
+    Use when: pricing a built app with real eval data. For quick what-if numbers at idea stage use
+    aso_unit_economics.
+    Returns: {ok, products: [{margin, ...}], path}."""
     return store_mod.write_pricing(app_dir, cost_photo, cost_text, apple_cut)
 
 
 @tool
 def asc_sbp_check(report_date: str | None = None, days_back: int = 7) -> dict[str, Any]:
-    """Small Business Program proof: latest SUBSCRIPTION/SUMMARY sales report (gzip TSV) → US
-    proceeds/price ratio (≈0.85 SBP, ≈0.70 standard). Needs a Finance-role key: asc_finance_key_id +
-    asc_finance_key_filepath (+ asc_vendor_number); 403 → clear error."""
+    """Prove Small Business Program status from the latest subscription sales report (US proceeds/price ratio,
+    about 0.85 SBP vs 0.70 standard; live, read-only).
+
+    Use when: confirming the 15% commission. Needs a Finance-role key (asc_finance_key_id,
+    asc_finance_key_filepath, asc_vendor_number); a 403 gives a clear error.
+    Returns: {ok, ratio, program, report_date}."""
     return sbp_mod.check(report_date, days_back)
 # ---- end WP:backend ----
 
@@ -1475,22 +1725,31 @@ from . import storekit as storekit_mod  # noqa: E402
 
 @tool
 def storekit_generate(app_dir: str) -> dict[str, Any]:
-    """Write Resources/Configuration.storekit from the app's app.spec.json (group, levels, free-trial
-    intro offers, trial-less offer product, en_US). Deterministic; run after any product change."""
+    """Write Resources/Configuration.storekit from app.spec.json (group, levels, free-trial intros, trial-less
+    offer product).
+
+    Use when: after any product change. Deterministic. app_sync_spec also regenerates it together with Swift
+    sources.
+    Returns: {ok, path, products}."""
     return storekit_mod.generate_for_app(app_dir)
 
 
 @tool
 def storekit_parity(app_dir: str, storekit_path: str | None = None) -> dict[str, Any]:
-    """Compare a Configuration.storekit with app.spec.json; returns every mismatch (price, period,
-    level, intro offer, missing/extra product, group, locale). ok=true means in parity."""
+    """Compare a Configuration.storekit with app.spec.json and list every mismatch (read-only).
+
+    Use when: verifying products match before store_setup or release. ok=true means in parity.
+    Returns: {ok, mismatches: [...]}."""
     return storekit_mod.parity_for_app(app_dir, storekit_path)
 
 
 @tool
 def app_sync_spec(app_dir: str) -> dict[str, Any]:
-    """Re-generate AppSpec.swift, PaywallSource.swift and Configuration.storekit (and prune the String
-    Catalogs to locales.app) after editing app.spec.json."""
+    """Regenerate AppSpec.swift, PaywallSource.swift and Configuration.storekit and prune String Catalogs to
+    locales.app.
+
+    Use when: after editing app.spec.json. Local writes only.
+    Returns: {ok, files}."""
     return app_mod.sync_spec(app_dir)
 # ---- end WP:ios ----
 
@@ -1505,11 +1764,12 @@ from .design import screens as design_screens  # noqa: E402
 
 @tool
 def design_screens_skeleton(app_dir: str, write: bool = False, overwrite: bool = False) -> dict[str, Any]:
-    """STRUCTURAL skeleton for design/screens.json: with a design brief, the onboarding follows the brief's
-    onboarding.flow (stubs for kinds the default funnel lacks) and carries brief_sha256; without one, the
-    default honest funnel. Rules stay: no fake stats/reviews, spin wheel, rating or notification prompt.
-    ADAPT EVERY SCREEN to the app and the brief — the look is authored in Claude Design, not here.
-    write=True saves it to <app>/design/screens.json (refuses to replace an existing file unless overwrite)."""
+    """Produce the structural skeleton for design/screens.json, following the design brief's onboarding flow when
+    one exists.
+
+    Use when: starting design. Adapt every screen to the app; the look is authored in Claude Design. write=true
+    saves it (refuses to replace an existing file unless overwrite).
+    Returns: {ok, screens|path, onboarding, main}."""
     from . import spec as spec_mod
     sp = spec_mod.load(app_dir) if spec_mod.path(app_dir).exists() else None
     doc = design_mod.skeleton(sp, app_dir)
@@ -1525,18 +1785,22 @@ def design_screens_skeleton(app_dir: str, write: bool = False, overwrite: bool =
 @tool
 def design_research_collect(app_dir: str, terms: list[str], countries: list[str] | None = None,
                             max_apps: int = 16, screenshots_per_app: int = 6) -> dict[str, Any]:
-    """Design research: the category leaders across storefronts (iTunes Search for `terms` + the genre's
-    top-grossing/top-free charts, looked up for screenshots/artwork) → downloads their App Store screenshots
-    and icons to design/research/apps/<id>-<slug>/ + references.json. Study material only (never uploaded)."""
+    """Download category-leader App Store screenshots and icons into design/research/apps/ with references.json
+    (study material only).
+
+    Use when: first design step. Then write the brief (design_research_brief_template) and run
+    design_research_check.
+    Returns: {ok, apps: [{id, name, files}], references} (untrusted_content)."""
     from .design import research
     return research.collect(app_dir, terms, countries, max_apps=max_apps, screenshots_per_app=screenshots_per_app)
 
 
 @tool
 def design_research_brief_template(app_dir: str) -> dict[str, Any]:
-    """The design/research/brief.json shape (pre-filled with the reference ids): purpose, analysis, and a
-    direction per section (palette tokens, typography, components, density, illustration, onboarding flow,
-    paywall, screenshots analysis + concept + boards), each citing references and what it does differently."""
+    """Return the design/research/brief.json shape pre-filled with the reference ids.
+
+    Use when: authoring the design brief after design_research_collect. Read-only.
+    Returns: {ok, template, write_to: [paths]}."""
     from .design import research
     return {"ok": True, "template": research.brief_template(app_dir),
             "write_to": [research.BRIEF_JSON_REL, research.BRIEF_MD_REL]}
@@ -1544,78 +1808,95 @@ def design_research_brief_template(app_dir: str) -> dict[str, Any]:
 
 @tool
 def design_research_check(app_dir: str) -> dict[str, Any]:
-    """The design_research gate: ≥6 reference apps with icon + screenshots on disk, and a valid brief
-    (every section cited, screenshot concept citing ≥4 competitor sets, palette/type not the template
-    defaults or another factory app's)."""
+    """Run the design_research gate: at least 6 reference apps on disk and a valid, cited brief.
+
+    Use when: before design_generate. Read-only.
+    Returns: {ok, problems: [...]}."""
     from .design import research
     return research.check(app_dir)
 
 
 @tool
 def design_generate(app_dir: str) -> dict[str, Any]:
-    """Prepare the app's Claude Design project (the factory's ONLY design source) from the design brief,
-    app.spec.json and design/screens.json. Writes STRUCTURAL scaffolds to design/scaffold/ (every screen incl.
-    paywall/offer, the B01-AppIcon slot, one ST board per brief screenshot board) and into design/project/ the
-    mascot motion boards, canvas.json, store_layout.json and upload_plan.json (plan.authored = boards Claude
-    must author in Claude Design from the brief). Refuses without valid research/brief or when screens/tokens
-    are not derived from the brief. Returns the claude-design MCP calls; this tool never uploads."""
+    """Prepare the app's Claude Design project from the brief, spec and screens.json: scaffolds, mascot boards,
+    canvas, store layout and upload plan.
+
+    Use when: after design_research_check passes. Never uploads; it returns the claude-design MCP calls to make.
+    Then record with design_record_upload.
+    Returns: {ok, plan, mcp_calls}."""
     return design_mod.generate(app_dir)
 
 
 @tool
 def design_record_upload(app_dir: str, project_id: str, open_url: str) -> dict[str, Any]:
-    """Record a finished Claude Design upload: SHA-256 of every file in upload_plan.json →
-    design/project/claude_design.json. open_url = the claude.ai/design link from render_preview (never the
-    serve_url). The design, icon and screenshots gates fail until this receipt exists and matches the files."""
+    """Record a finished Claude Design upload: the SHA-256 of every file in upload_plan.json into
+    design/project/claude_design.json.
+
+    Use when: after uploading through the claude-design MCP; the design, icon and screenshot gates fail until
+    this receipt matches.
+    Returns: {ok, receipt path, files}."""
     from .design import receipt
     return receipt.record(app_dir, project_id, open_url)
 
 
 @tool
 def design_upload_status(app_dir: str) -> dict[str, Any]:
-    """Is the local Claude Design project uploaded and unchanged since (the check every design gate runs)?"""
+    """Check whether the local Claude Design project is uploaded and unchanged since (read-only).
+
+    Use when: diagnosing a design gate failure.
+    Returns: {ok, uploaded, changed_files}."""
     from .design import receipt
     return receipt.check(app_dir)
 
 
 @tool
 def design_export_png(serve_url: str, out_path: str, width: int, height: int, scale: int = 1) -> dict[str, Any]:
-    """Rasterize a Claude Design board with local headless Chrome (not Claude in Chrome). serve_url comes from
-    mcp__claude-design__render_preview and is used once, never stored. Icon: B01-AppIcon, 1024×1024 →
-    design/icon.png. Store layout check: an ST0N board at 440×956, scale=3 → 1320×2868."""
+    """Rasterize a Claude Design board to PNG with local headless Chrome.
+
+    Use when: icon (B01-AppIcon 1024x1024 to design/icon.png) or store layout boards (440x956, scale 3).
+    serve_url comes from claude-design render_preview and is used once.
+    Returns: {ok, path, width, height}."""
     from .design import export
     return export.export_png(serve_url, out_path, width, height, scale)
 
 
 @tool
 def mascot_blink(app_dir: str, states: list[str] | None = None, paths: list[str] | None = None) -> dict[str, Any]:
-    """Closed-eye copies of the APPROVED pose PNGs (<state>-blink.png next to each): iris blobs in the upper 55 %,
-    inpainted with the surrounding color, closed-lid arcs. Default input: <app>/design/mascot/<state>.png.
-    Needs the optional extra: `uv sync --extra mascot`. Never rig from a separate parts sheet."""
+    """Create closed-eye blink copies (<state>-blink.png) of the approved mascot pose PNGs.
+
+    Use when: before mascot_assets. Needs the optional extra `uv sync --extra mascot`.
+    Returns: {ok, written: [paths]}."""
     return mascot_mod.blink(app_dir, states, paths)
 
 
 @tool
 def mascot_assets(app_dir: str, source_dir: str | None = None, states: list[str] | None = None) -> dict[str, Any]:
-    """Import approved poses + blink variants into Resources/Assets.xcassets/Mascot/<state>{,-blink}.imageset
-    (namespaced → Image("Mascot/idle")); states without a pose borrow a fallback pose."""
+    """Import approved mascot poses and blink variants into Resources/Assets.xcassets/Mascot/.
+
+    Use when: after mascot_blink; states without a pose borrow a fallback.
+    Returns: {ok, imagesets: [names]}."""
     return mascot_mod.assets(app_dir, source_dir, states)
 
 
 @tool
 def team_brief(app_dir: str, sessions: dict[str, str] | None = None, repo: str | None = None,
                overwrite: bool = False) -> dict[str, Any]:
-    """Render docs/TEAM.md, docs/team/{ios,backend,store}.md, docs/onboarding-plan.md (from design/screens.json),
-    store/aso-research.md and docs/CHECKLIST.md from the spec. sessions: {lead, ios, backend, store} names."""
+    """Render the team docs (TEAM.md, per-role briefs, onboarding plan, ASO research, CHECKLIST.md) from the spec.
+
+    Use when: setting up multi-session work. Existing files are kept unless overwrite=true.
+    Returns: {ok, files}."""
     return team_mod.brief(app_dir, sessions, repo, overwrite)
 
 
 @tool
 def github_issues_bootstrap(repo: str, dry_run: bool = True, approval_id: str | None = None,
                             app_dir: str | None = None) -> dict[str, Any]:
-    """Create/refresh the label set (ios, backend, store, lead, founder, next, later, other-project) on
-    <owner>/<repo>, gh runs as the configured GitHub account. dry_run returns the commands; live: human approval.
-    n/a (nothing runs) when the user turned off the github_issues run option (pass app_dir to read it from the spec)."""
+    """Create or refresh the GitHub label set (ios, backend, store, lead, founder, next, later, other-project) on a
+    repo (needs human approval unless dry_run).
+
+    Use when: before github_issue_create. dry_run=true (default) returns the commands. No-op (n/a) when the
+    github_issues run option is off.
+    Returns: {ok, commands/created, dry_run} or an approval_required refusal."""
     if options_mod.is_off(app_dir, "github_issues"):
         return _option_na("github_issues")
     if not dry_run:
@@ -1628,9 +1909,11 @@ def github_issues_bootstrap(repo: str, dry_run: bool = True, approval_id: str | 
 @tool
 def github_issue_create(repo: str, title: str, labels: list[str], body: str, dry_run: bool = True,
                         approval_id: str | None = None, app_dir: str | None = None) -> dict[str, Any]:
-    """Open an issue for postponed work: imperative title, a role label (+ next|later), body with
-    what/why/done-when. Runs gh as the configured GitHub account. dry_run returns the exact command; live:
-    human approval. n/a (nothing runs) when the user turned off the github_issues run option (pass app_dir)."""
+    """Open a GitHub issue for postponed work (needs human approval unless dry_run).
+
+    Use when: parking work with a role label plus next or later. dry_run=true (default) returns the exact
+    command. No-op (n/a) when the github_issues run option is off.
+    Returns: {ok, url/command, dry_run} or an approval_required refusal."""
     if options_mod.is_off(app_dir, "github_issues"):
         return _option_na("github_issues")
     if not dry_run:
@@ -1670,7 +1953,11 @@ def playbook_resource() -> str:
 
 @tool
 def playbook() -> str:
-    """Return the AppFactory run playbook (markdown). Read it before driving the pipeline."""
+    """Return the AppFactory run playbook as markdown.
+
+    Use when: before driving the pipeline; the same text is the `run` prompt and the appfactory://playbook
+    resource.
+    Returns: markdown string."""
     return _playbook_text()
 
 
