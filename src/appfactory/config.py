@@ -8,6 +8,7 @@ server-side (ai-proxy secrets); they are never injected into the app binary.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import os
 import re as _re
 import tomllib
@@ -114,9 +115,8 @@ def _toml_value(value: Any) -> str:
     if isinstance(value, list):
         items = ", ".join(_toml_value(v) for v in value)
         return f"[{items}]"
-    # string — escaped
-    s = str(value).replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{s}"'
+    # string: JSON escaping is valid TOML basic-string escaping (newlines, quotes, control chars)
+    return json.dumps(str(value), ensure_ascii=False)
 
 
 def save_config(cfg: dict[str, Any]) -> Path:

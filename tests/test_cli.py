@@ -98,3 +98,12 @@ def test_doctor_never_prints_secrets(fake_home, capsys):
     assert cli.main(["doctor"]) == 0
     out = capsys.readouterr().out
     assert "sbp_topsecret" not in out and "supabase_access_token=set" in out
+
+
+def test_save_config_round_trips_multiline_and_quotes(tmp_path, monkeypatch):
+    from appfactory import config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(cfg, "CONFIG_PATH", tmp_path / "config.toml")
+    value = '---\n- cookie: "a\\b"\n\ttab'
+    cfg.save_config({"apple_session": value, "services": ["research"]})
+    assert cfg.load_config()["apple_session"] == value
