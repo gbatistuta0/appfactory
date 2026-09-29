@@ -22,9 +22,9 @@ claude mcp add appfactory -s user -- uvx appfactory@latest
 
 ---
 
-<p align="center"><img src="docs/demo/demo.gif" alt="AppFactory validating an iOS app niche with live App Store data" width="900"></p>
+<p align="center"><img src="docs/demo/demo.gif" alt="A real, sped-up agent session: AppFactory scores water-tracking niches with live App Store data" width="900"></p>
 
-That first step needs no accounts. From there, the same agent can take the idea all the way to a TestFlight build.
+A real session, sped up. That first step needs no accounts. From there, the same agent can take the idea all the way to a TestFlight build.
 
 ## What it does
 
