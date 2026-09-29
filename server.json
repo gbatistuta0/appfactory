@@ -1,0 +1,19 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.gbatistuta0/appfactory",
+  "description": "Takes a SwiftUI iOS subscription app from idea to the App Store, with gated stages and human approvals.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/gbatistuta0/appfactory",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "appfactory",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" }
+    }
+  ]
+}

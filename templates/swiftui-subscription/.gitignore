@@ -1,0 +1,6 @@
+
+# AppFactory — hassas / artifact (ASLA commit'lenmez)
+.appfactory_fb_sa.json
+firebase-debug.log
+build/
+*.xcuserstate

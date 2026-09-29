@@ -1,0 +1,89 @@
+# Smoke: fresh launch → the whole onboarding (whatever questions the features stage wrote)
+# → the hard paywall is on screen with its plans. Stops there: never taps paywall_cta.
+appId: __BUNDLE_ID__
+name: smoke_onboarding_paywall
+tags:
+  - smoke
+  - onboarding
+  - paywall
+---
+- launchApp:
+    clearState: true
+    arguments:
+      -uiTest: true
+      -resetOnboarding: true      # clearState does not reset UserDefaults on the simulator
+      -trialEligible: "NO"
+      -AppleLanguages: "(en)"
+      -AppleLocale: "en_US"
+- extendedWaitUntil:
+    visible:
+      id: onb_cta
+    timeout: 20000
+# Walk every step generically, one action per pass, until the hard paywall shows:
+# accept consent, answer a question with its first option, continue, skip the account
+# step. Loading steps advance by themselves (-uiTest makes them instant), so the loop
+# just comes round again. Expect ~3–4 min for a 20-step onboarding: after every tap
+# Maestro waits ~7 s for the animated step to settle before the next check.
+- repeat:
+    times: 60
+    while:
+      notVisible:
+        # @if hard_paywall
+        id: paywall_cta
+        # @endif
+        # @if !hard_paywall
+        id: tab_create   # no paywall in the funnel: onboarding ends in the main app
+        # @endif
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: onb_cta
+              enabled: false
+          commands:
+            - runFlow:
+                when:
+                  visible:
+                    id: consent_switch
+                commands:
+                  - tapOn: {id: consent_switch}
+            - runFlow:
+                when:
+                  visible:
+                    id: onb_cta
+                    enabled: false
+                commands:
+                  - tapOn:
+                      id: "option_.*"
+                      index: 0
+      - runFlow:
+          when:
+            visible:
+              id: onb_cta
+              enabled: true
+          commands:
+            - tapOn: {id: onb_cta}
+      - runFlow:
+          when:
+            visible:
+              id: account_skip
+          commands:
+            - tapOn: {id: account_skip}
+# @if hard_paywall
+- extendedWaitUntil:
+    visible:
+      id: paywall_cta
+    timeout: 15000
+- assertVisible: {id: paywall_title}
+- assertVisible: {id: "plan_.*"}          # at least one plan rendered
+- assertVisible: {id: paywall_restore}
+# @endif
+# @if !hard_paywall
+- extendedWaitUntil:
+    visible:
+      id: tab_create
+    timeout: 15000
+- assertNotVisible: {id: paywall_cta}
+# @endif
+# Terms/Privacy (paywall_terms, paywall_privacy) render only once the legal pages are
+# deployed (AppConfig.legalURL); the features gate checks them statically.

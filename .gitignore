@@ -1,0 +1,33 @@
+# secrets — never commit
+.p8
+*.p8
+AuthKey_*.p8
+*.env
+.env
+/config.toml
+.appfactory/
+# python
+__pycache__/
+.venv/
+*.pyc
+# node
+node_modules/
+# xcode
+DerivedData/
+*.xcuserstate
+build/
+*.ipa
+
+# supabase CLI leftovers
+templates/swiftui-subscription/supabase/.temp/
+
+.DS_Store
+**/.DS_Store
+
+# scratch builds (sample apps, DerivedData)
+.scratch/
+
+# private / local
+docs/superpowers/
+dist/
+*.bak-*

@@ -1,0 +1,132 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "comment" : "App name on the home screen (same in every language)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__"
+          }
+        }
+      }
+    },
+    "NSHealthShareUsageDescription" : {
+      "comment" : "[module:health] Apple Health read permission",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__ liest deine Aktivität und dein Gewicht, damit dein Plan genau bleibt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__ reads your activity and weight to keep your plan accurate."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__ lee tu actividad y tu peso para mantener tu plan al día."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__ lit ton activité et ton poids pour garder ton plan précis."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O __DISPLAY_NAME__ lê sua atividade e seu peso para manter seu plano preciso."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__, planını doğru tutmak için aktiviteni ve kilonu okur."
+          }
+        }
+      }
+    },
+    "NSHealthUpdateUsageDescription" : {
+      "comment" : "[module:health] Apple Health write permission",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__ speichert deine erfasste Ernährung und dein Gewicht in Apple Health."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__ saves your logged nutrition and weight to Apple Health."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__ guarda en Salud la nutrición y el peso que registras."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__ enregistre ta nutrition et ton poids dans l'app Santé."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O __DISPLAY_NAME__ salva no app Saúde a nutrição e o peso que você registra."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "__DISPLAY_NAME__, kaydettiğin beslenme ve kilo verilerini Apple Sağlık'a kaydeder."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

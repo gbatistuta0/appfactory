@@ -1,0 +1,162 @@
+# XcodeGen spec — app_scaffold fills __APP_NAME__ / __BUNDLE_ID__ / __DISPLAY_NAME__ from app.spec.json
+# and strips the optional-module blocks the spec turns off. Run `xcodegen generate` after edits.
+# iOS 17.5+, iPhone only, portrait. Unit + UI test targets with coverage.
+# Native iOS 26: build with the iOS 26 SDK (Xcode 26+) so the system chrome (TabView, navigation bars,
+# sheets, controls) is Liquid Glass on iOS 26; iOS 26 APIs sit behind #available (features gate).
+# StoreKit configuration: the main scheme has NONE, in run and test, because it is
+# the one that goes to a device — a device running under the local Configuration.storekit is in Xcode's
+# StoreKit-testing environment, where Apple's Billing Problem sheet looped on every launch. The local
+# file is only used by the simulator schemes: __APP_NAME__StoreKitSim (run: sandbox-free purchases on a
+# simulator) and __APP_NAME__UnitTests (billing unit tests; SKTestSession also loads the file directly).
+# Never pick those two for a device.
+name: __APP_NAME__
+options:
+  bundleIdPrefix: __BUNDLE_PREFIX__
+  deploymentTarget:
+    iOS: "17.5"
+  createIntermediateGroups: true
+  developmentLanguage: en
+packages:
+  # @if firebase
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk.git
+    from: "11.0.0"
+  # @endif
+  # @if revenuecat
+  RevenueCat:
+    url: https://github.com/RevenueCat/purchases-ios.git
+    from: "5.0.0"
+  # @endif
+  Lottie:
+    url: https://github.com/airbnb/lottie-spm.git
+    from: "4.6.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_LANG: en
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+targets:
+  __APP_NAME__:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+      - Resources
+      # Privacy manifest (collected data, required-reason APIs), generated from app.spec.json.
+      # Every shipped bundle needs one: add one per extension (widgets, Watch) too.
+      - path: Privacy/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      # @if firebase
+      - package: Firebase
+        product: FirebaseAnalytics
+      # @endif
+      # @if revenuecat
+      - package: RevenueCat
+        product: RevenueCat
+      # @endif
+      - package: Lottie
+        product: Lottie
+      # @if health
+      - sdk: HealthKit.framework
+      # @endif
+    entitlements:
+      path: __APP_NAME__.entitlements
+      properties:
+        # @if siwa
+        # Sign in with Apple: links the anonymous Supabase user (Settings → Save your progress).
+        com.apple.developer.applesignin: [Default]
+        # @endif
+        # @if health
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        # @endif
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __BUNDLE_ID__
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        # iPhone only: do not show up as "Designed for iPhone" on iPad, Mac or Vision.
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_CFBundleDisplayName: "__DISPLAY_NAME__"
+        # Firebase's automatic screen_view reports SwiftUI's mangled type names; Tracker.screen()
+        # sends real screen names instead.
+        INFOPLIST_KEY_FirebaseAutomaticScreenReportingEnabled: NO
+        # @if health
+        # English floor; translations live in Resources/InfoPlist.xcstrings.
+        INFOPLIST_KEY_NSHealthShareUsageDescription: "__DISPLAY_NAME__ reads your activity and weight to keep your plan accurate."
+        INFOPLIST_KEY_NSHealthUpdateUsageDescription: "__DISPLAY_NAME__ saves your logged nutrition and weight to Apple Health."
+        # @endif
+  __APP_NAME__Tests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: __APP_NAME__
+      - sdk: StoreKitTest.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __BUNDLE_ID__.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+  __APP_NAME__UITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: __APP_NAME__
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __BUNDLE_ID__.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        TEST_TARGET_NAME: __APP_NAME__
+schemes:
+  __APP_NAME__:
+    build:
+      targets:
+        __APP_NAME__: all
+        __APP_NAME__Tests: [test]
+        __APP_NAME__UITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      coverageTargets:
+        - __APP_NAME__
+      targets:
+        - __APP_NAME__Tests
+        - __APP_NAME__UITests
+  # Simulator only: local StoreKit purchases without a sandbox account.
+  __APP_NAME__StoreKitSim:
+    build:
+      targets:
+        __APP_NAME__: all
+    run:
+      config: Debug
+      storeKitConfiguration: Resources/Configuration.storekit
+  __APP_NAME__UnitTests:
+    build:
+      targets:
+        __APP_NAME__: all
+        __APP_NAME__Tests: [test]
+    test:
+      config: Debug
+      storeKitConfiguration: Resources/Configuration.storekit
+      gatherCoverageData: true
+      coverageTargets:
+        - __APP_NAME__
+      targets:
+        - __APP_NAME__Tests

@@ -1,0 +1,7 @@
+[
+  {"id": "ev1", "app": "myapp", "user_id": "u1", "type": "INITIAL_PURCHASE", "price_usd": 9.99, "price_local": 9.99, "currency": "USD", "is_trial": false, "sign": 1, "country": "US", "store": "APP_STORE", "ts": "2026-06-22T10:00:00+00:00"},
+  {"id": "ev2", "app": "myapp", "user_id": "u2", "type": "INITIAL_PURCHASE", "price_usd": 49.99, "price_local": 49.99, "currency": "USD", "is_trial": false, "sign": 1, "country": "US", "store": "APP_STORE", "ts": "2026-06-22T11:00:00+00:00"},
+  {"id": "ev3", "app": "myapp", "user_id": "u3", "type": "TRIAL_STARTED", "price_usd": 9.99, "price_local": 9.99, "currency": "USD", "is_trial": true, "sign": 1, "country": "US", "store": "APP_STORE", "ts": "2026-06-22T12:00:00+00:00"},
+  {"id": "ev4", "app": "myapp", "user_id": "u4", "type": "INITIAL_PURCHASE", "price_usd": 4.99, "price_local": 159.0, "currency": "TRY", "is_trial": false, "sign": 1, "country": "TR", "store": "APP_STORE", "ts": "2026-06-22T13:00:00+00:00"},
+  {"id": "ev5", "app": "myapp", "user_id": "u1", "type": "REFUND", "price_usd": 9.99, "price_local": 9.99, "currency": "USD", "is_trial": false, "sign": -1, "country": "US", "store": "APP_STORE", "ts": "2026-06-22T14:00:00+00:00"}
+]

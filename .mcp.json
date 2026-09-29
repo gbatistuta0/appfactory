@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "appfactory": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        ".",
+        "python",
+        "-m",
+        "appfactory.server"
+      ],
+      "env": {}
+    },
+    "lottiefiles-creator": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@lottiefiles/creator-mcp@latest"
+      ],
+      "env": {}
+    },
+    "xcodebuild": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "xcodebuildmcp@latest",
+        "mcp"
+      ],
+      "env": {}
+    },
+    "revenuecat": {
+      "type": "http",
+      "url": "https://mcp.revenuecat.ai/mcp"
+    }
+  }
+}

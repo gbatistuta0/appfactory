@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="iPhone 17 Pro - iOS 26.3 - SIM-UDID" tests="2" failures="1" time="19.379" timestamp="2026-09-28T16:36:19">
+    <testcase id="ok" name="ok" classname="ok" file=".maestro/flows/ok.yaml" time="1.878" timestamp="2026-09-28T16:36:19" status="SUCCESS"/>
+    <testcase id="bad" name="bad" classname="bad" file=".maestro/flows/bad.yaml" time="17.495" timestamp="2026-09-28T16:36:20" status="ERROR">
+      <properties>
+        <property name="tags" value="smoke"/>
+      </properties>
+      <failure>Assertion is false: "Definitely not here" is visible</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

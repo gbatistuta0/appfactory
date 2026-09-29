@@ -1,0 +1,11 @@
+# Maestro workspace. Run: maestro test .maestro/  (or the appfactory maestro_test tool)
+# Flows tagged `smoke` must pass before TestFlight (features gate + testflight_ship).
+#
+# Rules for every flow saved here:
+#   - Never tap a purchase button (paywall_cta, offer_cta, topup_pack_*) or anything that
+#     spends a paid AI call. Stop before it.
+#   - Launch with `-uiTest`: no analytics, no Supabase/RevenueCat network, demo prices.
+#   - Launch argument keys need the leading dash (`-uiTest: true`); Maestro passes them verbatim.
+#   - Prefer accessibility ids, then text; coordinates only when nothing else works.
+flows:
+  - "flows/*"

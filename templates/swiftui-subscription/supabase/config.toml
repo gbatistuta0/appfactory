@@ -1,0 +1,48 @@
+# Supabase CLI config (factory subscription mode). supabase.render_backend rewrites the marked
+# values from app.spec.json. `supabase config push` applies the whole [auth] section, so the values
+# below mirror the hosted defaults on purpose; the factory-specific ones are commented.
+project_id = "__APP_NAME__"
+
+# The functions also verify the caller themselves (auth.getUser), so they stay safe even if the
+# gateway check is turned off for asymmetric JWT signing keys.
+[functions.analyze]
+verify_jwt = true
+
+[functions.usage-status]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+# Public legal pages (linked from the app and App Store Connect): no JWT.
+[functions.legal]
+verify_jwt = false
+
+# RevenueCat webhook: authenticated by the shared RC_WEBHOOK_SECRET header, not a user JWT.
+[functions.rc-webhook]
+verify_jwt = false
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = []
+# Identity (backend/CONTRACT.md §1): the app signs in anonymously on first launch; that user id is
+# the RevenueCat app_user_id. Later the user may link Sign in with Apple to the SAME user, which
+# needs manual identity linking.
+enable_anonymous_sign_ins = true
+enable_manual_linking = true
+
+# Sign in with Apple, native flow (ID token from AuthenticationServices). For the native flow the
+# client id is the app's bundle id and no OAuth secret is needed; the secret is only for web OAuth.
+[auth.external.apple]
+enabled = true
+client_id = "__BUNDLE_ID__"
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8

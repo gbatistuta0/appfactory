@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "test": "deno test --allow-env --allow-read --allow-write --allow-net=registry.npmjs.org,jsr.io tests/ functions/ ../backend/legal/ ../backend/eval/",
+    "check": "deno check functions/analyze/index.ts functions/usage-status/index.ts functions/delete-account/index.ts functions/legal/index.ts functions/rc-webhook/index.ts",
+    "lint": "deno lint functions/ tests/ ../backend/"
+  },
+  "fmt": { "lineWidth": 110 },
+  "lint": { "rules": { "exclude": ["no-explicit-any", "no-import-prefix"] } }
+}

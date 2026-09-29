@@ -1,0 +1,7 @@
+{
+  "name": "appfactory-screenshots",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "dependencies": { "sharp": "^0.33.0" }
+}

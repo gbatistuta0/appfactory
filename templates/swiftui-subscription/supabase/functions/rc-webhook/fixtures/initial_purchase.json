@@ -1,0 +1,15 @@
+{
+  "_synthetic_note": "SYNTHETIC, BASED ON THE DOCUMENTED SCHEMA (RevenueCat webhook). Replace with a real 'Send test event' / sandbox payload and verify the map.ts fields (premortem C).",
+  "event": {
+    "id": "rc_evt_init_1",
+    "type": "INITIAL_PURCHASE",
+    "app_user_id": "user-abc",
+    "price": 9.99,
+    "price_in_purchased_currency": 9.99,
+    "currency": "USD",
+    "country_code": "US",
+    "store": "APP_STORE",
+    "period_type": "NORMAL",
+    "event_timestamp_ms": 1782000000000
+  }
+}

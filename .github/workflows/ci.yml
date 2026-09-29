@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+      - run: uv run pytest -q
+
+  leak-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  author-emails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Commit author and committer emails must be @appfactory.local or noreply.github.com
+        run: |
+          bad=$(git log --format='%h %ae %ce' | awk '
+            { for (i = 2; i <= 3; i++) if ($i !~ /@appfactory\.local$/ && $i !~ /noreply\.github\.com$/) { print; break } }')
+          if [ -n "$bad" ]; then
+            echo "Commits with a non-allowed email:"; echo "$bad"; exit 1
+          fi

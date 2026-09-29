@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Scaffold snapshot stores file content hashes, not secrets"
+paths = ['''tests/fixtures/scaffold_golden\.json''']

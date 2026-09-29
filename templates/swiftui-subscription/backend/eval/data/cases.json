@@ -1,0 +1,9 @@
+{
+  "source": "Neutral example set (replace in the features stage; see EVAL.md). Text-only so it needs no images.",
+  "created": "2026-09-24T00:00:00.000Z",
+  "cases": [
+    { "id": "red-door", "mode": "text", "image": null, "text": "a red wooden door in a white wall", "expected": { "keywords": ["door"] } },
+    { "id": "sunset-sea", "mode": "text", "image": null, "text": "an orange sunset over a calm sea", "expected": { "keywords": ["sunset"] } },
+    { "id": "not-applicable", "mode": "text", "image": null, "text": "asdf qwerty", "expected": {} }
+  ]
+}

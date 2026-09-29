@@ -1,0 +1,14 @@
+{
+  "event": {
+    "id": "rc_evt_trial_1",
+    "type": "TRIAL_STARTED",
+    "app_user_id": "user-def",
+    "price": 0,
+    "price_in_purchased_currency": 0,
+    "currency": "USD",
+    "country_code": "US",
+    "store": "APP_STORE",
+    "period_type": "TRIAL",
+    "event_timestamp_ms": 1782000100000
+  }
+}

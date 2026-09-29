@@ -1,0 +1,20 @@
+{
+  "_note": "Shape of a REAL `asc ads reports apps campaigns` result (groupBy countryOrRegion, DAILY), captured 2026-09-28; values are synthetic so the TRY conversion is exercised.",
+  "rows": [
+    {
+      "totalMetrics": {"localSpend": {"amount": "20.22", "currency": "USD"}, "impressions": 900, "taps": 40, "totalInstalls": 10},
+      "granularMetrics": [
+        {"date": "2026-06-21"},
+        {"date": "2026-06-22", "localSpend": {"amount": "20.22", "currency": "USD"}, "impressions": 900, "taps": 40, "totalInstalls": 10}
+      ],
+      "metadata": {"id": 2144695870, "countryOrRegion": "US"}
+    },
+    {
+      "totalMetrics": {"localSpend": {"amount": "159.00", "currency": "TRY"}, "impressions": 300, "taps": 12, "totalInstalls": 3},
+      "granularMetrics": [
+        {"date": "2026-06-22", "localSpend": {"amount": "159.00", "currency": "TRY"}, "impressions": 300, "taps": 12, "totalInstalls": 3}
+      ],
+      "metadata": {"id": 2144708851, "countryOrRegion": "TR"}
+    }
+  ]
+}

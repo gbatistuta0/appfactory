@@ -1,0 +1,209 @@
+{
+  "_doc": "App Store listing metadata, one entry per App Store Connect locale (spec.locales.store). Source of truth for name, subtitle, keyword field, promotional text, description and the privacy/support URLs, plus the subscription group and product display copy (iap). Validated by the metadata gate (metadata_listing_check); applied by store_setup. {{PLACEHOLDERS}} are filled by the aso/localize stages; metadata_render_listing fills the legal URLs (the Supabase legal function, ?lang= matching the locale).",
+  "app": {
+    "name_en": "__DISPLAY_NAME__",
+    "bundle_id": "__BUNDLE_ID__"
+  },
+  "brand_words": [],
+  "cross_index": {
+    "us": [
+      "en-US",
+      "es-MX"
+    ],
+    "gb": [
+      "en-GB"
+    ]
+  },
+  "cross_index_allow": {},
+  "_rules": "name/subtitle <= 30, keywords 95-100 chars, promotional text <= 170; no word repeated across name/subtitle/keywords of a locale or across locales one storefront indexes (cross_index); the description ends with the subscription disclosure, then the Terms and Privacy links.",
+  "iap": {
+    "group_name": {
+      "en-US": "{{GROUP_NAME}}",
+      "en-GB": "{{GROUP_NAME}}",
+      "es-MX": "{{GROUP_NAME}}",
+      "es-ES": "{{GROUP_NAME}}",
+      "pt-BR": "{{GROUP_NAME}}",
+      "de-DE": "{{GROUP_NAME}}",
+      "fr-FR": "{{GROUP_NAME}}",
+      "tr": "{{GROUP_NAME}}"
+    },
+    "products": {
+      "yearly": {
+        "en-US": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "en-GB": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "es-MX": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "es-ES": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "pt-BR": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "de-DE": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "fr-FR": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "tr": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        }
+      },
+      "weekly": {
+        "en-US": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "en-GB": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "es-MX": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "es-ES": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "pt-BR": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "de-DE": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "fr-FR": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "tr": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        }
+      },
+      "yearly_offer": {
+        "en-US": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "en-GB": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "es-MX": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "es-ES": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "pt-BR": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "de-DE": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "fr-FR": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        },
+        "tr": {
+          "name": "{{PRODUCT_NAME_MAX_30}}",
+          "description": "{{PRODUCT_DESCRIPTION_MAX_45}}"
+        }
+      }
+    }
+  },
+  "locales": {
+    "en-US": {
+      "name": "{{NAME}}",
+      "subtitle": "{{SUBTITLE}}",
+      "keywords": "{{KEYWORDS_95_TO_100_CHARS}}",
+      "promotional_text": "{{PROMOTIONAL_TEXT}}",
+      "description": "{{DESCRIPTION_BODY}}\n\n--- Subscription & Legal ---\nPayment is charged to your Apple Account when you confirm the purchase or when the free trial ends. Subscriptions renew automatically unless canceled at least 24 hours before the end of the current period, and your account is charged for the renewal within 24 hours before the period ends. Manage or cancel anytime in your App Store account settings.\nTerms of Use: {{TERMS_URL}}\nPrivacy Policy: {{PRIVACY_URL}}",
+      "privacy_url": "{{PRIVACY_URL}}",
+      "support_url": "{{SUPPORT_URL}}"
+    },
+    "en-GB": {
+      "name": "{{NAME}}",
+      "subtitle": "{{SUBTITLE}}",
+      "keywords": "{{KEYWORDS_95_TO_100_CHARS}}",
+      "promotional_text": "{{PROMOTIONAL_TEXT}}",
+      "description": "{{DESCRIPTION_BODY}}\n\n{{DISCLOSURE_HEADING}}\n{{DISCLOSURE}}\n{{TERMS_LABEL}}: {{TERMS_URL}}\n{{PRIVACY_LABEL}}: {{PRIVACY_URL}}",
+      "privacy_url": "{{PRIVACY_URL}}",
+      "support_url": "{{SUPPORT_URL}}"
+    },
+    "es-MX": {
+      "name": "{{NAME}}",
+      "subtitle": "{{SUBTITLE}}",
+      "keywords": "{{KEYWORDS_95_TO_100_CHARS}}",
+      "promotional_text": "{{PROMOTIONAL_TEXT}}",
+      "description": "{{DESCRIPTION_BODY}}\n\n{{DISCLOSURE_HEADING}}\n{{DISCLOSURE}}\n{{TERMS_LABEL}}: {{TERMS_URL}}\n{{PRIVACY_LABEL}}: {{PRIVACY_URL}}",
+      "privacy_url": "{{PRIVACY_URL}}",
+      "support_url": "{{SUPPORT_URL}}"
+    },
+    "es-ES": {
+      "name": "{{NAME}}",
+      "subtitle": "{{SUBTITLE}}",
+      "keywords": "{{KEYWORDS_95_TO_100_CHARS}}",
+      "promotional_text": "{{PROMOTIONAL_TEXT}}",
+      "description": "{{DESCRIPTION_BODY}}\n\n{{DISCLOSURE_HEADING}}\n{{DISCLOSURE}}\n{{TERMS_LABEL}}: {{TERMS_URL}}\n{{PRIVACY_LABEL}}: {{PRIVACY_URL}}",
+      "privacy_url": "{{PRIVACY_URL}}",
+      "support_url": "{{SUPPORT_URL}}"
+    },
+    "pt-BR": {
+      "name": "{{NAME}}",
+      "subtitle": "{{SUBTITLE}}",
+      "keywords": "{{KEYWORDS_95_TO_100_CHARS}}",
+      "promotional_text": "{{PROMOTIONAL_TEXT}}",
+      "description": "{{DESCRIPTION_BODY}}\n\n{{DISCLOSURE_HEADING}}\n{{DISCLOSURE}}\n{{TERMS_LABEL}}: {{TERMS_URL}}\n{{PRIVACY_LABEL}}: {{PRIVACY_URL}}",
+      "privacy_url": "{{PRIVACY_URL}}",
+      "support_url": "{{SUPPORT_URL}}"
+    },
+    "de-DE": {
+      "name": "{{NAME}}",
+      "subtitle": "{{SUBTITLE}}",
+      "keywords": "{{KEYWORDS_95_TO_100_CHARS}}",
+      "promotional_text": "{{PROMOTIONAL_TEXT}}",
+      "description": "{{DESCRIPTION_BODY}}\n\n{{DISCLOSURE_HEADING}}\n{{DISCLOSURE}}\n{{TERMS_LABEL}}: {{TERMS_URL}}\n{{PRIVACY_LABEL}}: {{PRIVACY_URL}}",
+      "privacy_url": "{{PRIVACY_URL}}",
+      "support_url": "{{SUPPORT_URL}}"
+    },
+    "fr-FR": {
+      "name": "{{NAME}}",
+      "subtitle": "{{SUBTITLE}}",
+      "keywords": "{{KEYWORDS_95_TO_100_CHARS}}",
+      "promotional_text": "{{PROMOTIONAL_TEXT}}",
+      "description": "{{DESCRIPTION_BODY}}\n\n{{DISCLOSURE_HEADING}}\n{{DISCLOSURE}}\n{{TERMS_LABEL}}: {{TERMS_URL}}\n{{PRIVACY_LABEL}}: {{PRIVACY_URL}}",
+      "privacy_url": "{{PRIVACY_URL}}",
+      "support_url": "{{SUPPORT_URL}}"
+    },
+    "tr": {
+      "name": "{{NAME}}",
+      "subtitle": "{{SUBTITLE}}",
+      "keywords": "{{KEYWORDS_95_TO_100_CHARS}}",
+      "promotional_text": "{{PROMOTIONAL_TEXT}}",
+      "description": "{{DESCRIPTION_BODY}}\n\n{{DISCLOSURE_HEADING}}\n{{DISCLOSURE}}\n{{TERMS_LABEL}}: {{TERMS_URL}}\n{{PRIVACY_LABEL}}: {{PRIVACY_URL}}",
+      "privacy_url": "{{PRIVACY_URL}}",
+      "support_url": "{{SUPPORT_URL}}"
+    }
+  }
+}
