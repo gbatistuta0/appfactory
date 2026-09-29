@@ -1,24 +1,67 @@
+<div align="center">
+
 # AppFactory
 
-[![CI](https://github.com/gbatistuta0/appfactory/actions/workflows/ci.yml/badge.svg)](https://github.com/gbatistuta0/appfactory/actions/workflows/ci.yml)
+**Let your coding agent ship an iOS subscription app, from idea to TestFlight.**
+
+An open-source MCP server for Claude Code, Codex CLI, Gemini CLI and Cursor.
+It validates the idea with real App Store data, builds the SwiftUI app, sets up the backend and the store, and
+stops at every step that matters so you stay in control.
+
 [![PyPI](https://img.shields.io/pypi/v/appfactory.svg)](https://pypi.org/project/appfactory/)
+[![CI](https://github.com/gbatistuta0/appfactory/actions/workflows/ci.yml/badge.svg)](https://github.com/gbatistuta0/appfactory/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 ![MCP](https://img.shields.io/badge/MCP-server-8A2BE2.svg)
 
-An MCP server that lets your coding agent take a SwiftUI iOS subscription app from idea to the App Store.
+```bash
+claude mcp add appfactory -s user -- uvx appfactory@latest
+```
 
-**What it does:** idea harvesting and validation, design, SwiftUI code from a template, Supabase backend,
-App Store Connect + RevenueCat setup, localization, analytics, ASO, screenshots and TestFlight. Every stage
-has a gate the agent must pass. You do the final App Store submission.
+</div>
+
+---
+
+> **You:** Find 3 underserved iOS app niches in Health & Fitness and validate the best one.
+>
+> **Agent:** *(calls `idea_harvest`, `idea_evaluate`, `aso_niche_score`, `aso_competitor_iap`)*
+> "Water tracker" scores **68 / GO**: strong search demand, 47% of the top results have under 1k ratings and 43%
+> haven't shipped an update in 6 months. Here's what the leaders charge and an available name...
+
+That first step needs no accounts. From there, the same agent can take the idea all the way to a TestFlight build.
+
+## What it does
+
+```mermaid
+flowchart LR
+    A[💡 Idea<br/>real App Store data] --> B[🎨 Design<br/>competitor research]
+    B --> C[📱 SwiftUI app<br/>from a tested template]
+    C --> D[☁️ Backend<br/>Supabase]
+    D --> E[💳 Store<br/>IAPs + RevenueCat]
+    E --> F[🌍 Localize<br/>+ ASO + screenshots]
+    F --> G[🚀 TestFlight]
+    G -.you submit.-> H[App Store]
+```
+
+| Stage | What the agent does with AppFactory |
+|---|---|
+| **Idea** | Harvests rising and chart-proven apps, scores niches by search demand, competition and staleness, estimates competitor revenue, checks the name is free |
+| **Design** | Downloads category leaders' screenshots and icons, writes a differentiated design brief, designs every screen |
+| **App** | Scaffolds a SwiftUI app (iOS 17.5+, iPhone) with onboarding, paywalls, settings, analytics hooks and tests |
+| **Backend** | Supabase project, auth, edge functions, server-side usage limits, optional AI proxy (keys never ship in the app) |
+| **Store** | App Store Connect app, subscriptions with trials and local prices, RevenueCat offerings, StoreKit config kept in sync |
+| **Launch assets** | Localized metadata, ASO keywords, legal pages, branded screenshots, preview videos, custom product pages |
+| **Ship** | Signing, archive, TestFlight upload. You press "Submit for Review". |
+
+Every stage has a **gate**: the agent can't mark it done until checks pass (the build compiles, the store matches
+the spec, screenshots follow the rules...). When something needs you, the run stops with a clear `NEEDS_HUMAN.md`.
 
 ## Quickstart
 
-Requires a Mac, Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+**Requirements:** a Mac and [uv](https://docs.astral.sh/uv/) (`brew install uv`). Xcode and the other tools are
+only needed for the services you turn on.
 
-### 1. Add the MCP to your agent
-
-Like any MCP server. Research works with no keys at all:
+### 1. Add it to your agent
 
 | Agent | Command |
 |---|---|
@@ -27,10 +70,10 @@ Like any MCP server. Research works with no keys at all:
 | Gemini CLI | `gemini mcp add appfactory uvx appfactory@latest` |
 | Cursor | `~/.cursor/mcp.json`: `{"mcpServers": {"appfactory": {"command": "uvx", "args": ["appfactory@latest"]}}}` |
 
-### 2. Add keys for the services you use
+### 2. Say "Set up AppFactory"
 
-Keys are environment variables on the MCP entry, named `APPFACTORY_<KEY>`. For example, App Store Connect in
-Claude Code:
+The agent asks which services you want, one by one, and tells you exactly which keys are missing. Keys are
+environment variables on the MCP entry, like any other MCP server. They never go through the chat:
 
 ```bash
 claude mcp add appfactory -s user \
@@ -41,65 +84,76 @@ claude mcp add appfactory -s user \
   -- uvx appfactory@latest
 ```
 
-You don't need to know the names up front: say **"Set up AppFactory"** (or just start a run). The agent asks
-which services you want, one by one, and gives you the exact command for your agent with the keys that are
-still missing. Keys never go through the chat. Every variable is listed in [docs/SETUP.md](docs/SETUP.md).
+Every variable is listed in [docs/SETUP.md](docs/SETUP.md).
 
-Then try this first prompt. It needs no accounts:
+### 3. Run it
 
-> Find 3 underserved iOS app niches in Health & Fitness and validate the best one
+> Run AppFactory
 
-## Works with
-
-Claude Code, Codex CLI, Gemini CLI and Cursor. The run playbook is served by the MCP server itself (tool
-`playbook()`, prompt `run`, resource `appfactory://playbook`), so any MCP-capable agent can follow it.
+Before any work the agent asks you about every optional part of the app: free trial or not, hard paywall,
+discounted offer, onboarding quiz, mascot, languages, screenshots, preview video, analytics, ratings, Sign in
+with Apple... Anything you turn off is skipped, in the app code too.
 
 ## Choose what you use
 
-Every service is optional. Tools for a disabled service do nothing and the pipeline skips those stages
-(`appfactory services enable|disable NAME`).
+Everything except research is optional. A disabled service's tools do nothing and its stages are skipped, and the
+generated app doesn't include its SDK.
 
 | Service | What it enables | Needs |
 |---|---|---|
-| research | Idea harvesting, ASO research (always on) | nothing |
-| apple | App Store Connect: apps, in-app purchases, metadata, TestFlight | ASC API key, `asc` CLI |
+| research | Idea harvesting and validation, ASO research | nothing |
+| apple | App Store Connect: apps, subscriptions, metadata, TestFlight | ASC API key, [`asc`](https://github.com/rorkai/App-Store-Connect-CLI) CLI |
 | xcode | Local builds, simulator, archives | Xcode, `xcodegen` |
-| supabase | Backend: database, edge functions, credits | access token, `supabase`, `deno` |
-| revenuecat | Subscriptions and entitlements | RevenueCat secret key |
-| ai | AI features through a server-side proxy | optional provider keys |
-| firebase | Firebase Analytics setup | `firebase` CLI |
-| github | A repo and issues per app | `gh` |
-| design | Screen design through the claude-design MCP | claude-design MCP |
-| maestro | End-to-end UI tests on the simulator | Maestro, Java 17+ |
+| supabase | Backend: database, auth, edge functions, usage limits | access token, `supabase`, `deno` |
+| revenuecat | Subscriptions and entitlements (without it: StoreKit 2 only) | RevenueCat secret key |
+| ai | AI features through a server-side proxy (needs supabase) | provider keys, optional |
+| firebase | Firebase Analytics | `firebase` CLI |
+| github | A private repo and issue workflow per app | `gh` |
+| design | Screen design through the claude-design MCP (without it: design locally) | claude-design MCP |
+| maestro | End-to-end UI tests on the simulator (needs xcode) | Maestro, Java 17+ |
 | lottie | Lottie animations | `node` |
-
-Details and credential steps: [docs/SETUP.md](docs/SETUP.md).
 
 ## Safety
 
-- **Approvals.** Irreversible or outward actions (submission, store/backend/RevenueCat writes, GitHub pushes,
-  uploads) do not run when an agent calls them. They wait for `appfactory approve <id>` in your terminal.
-- **Dry run by default** for deploys, repo creation, uploads and issue writes.
-- **Secrets stay local** and are scrubbed from every tool result.
-- **Untrusted content** (App Store listings, reviews) is labelled as data, not instructions.
+Agents make mistakes and read untrusted web content, so AppFactory assumes they will.
 
-Full threat model and limits: [SECURITY.md](SECURITY.md).
+- **Human approval for anything irreversible.** Store writes, backend deploys, database changes, GitHub pushes,
+  uploads and signing don't run when the agent calls them. They wait until you run `appfactory approve <id>` in
+  your own terminal. The agent can't approve on your behalf.
+- **You submit.** App Store review submission is always done by you.
+- **Dry run by default** for deploys, repo creation and uploads. Destructive SQL always needs approval.
+- **Secrets stay on your machine** and are masked in every tool result.
+- **Third-party text is data.** App Store listings and reviews are labelled so the agent doesn't follow
+  instructions hidden in them.
 
-## How a run works
+Threat model and limits: [SECURITY.md](SECURITY.md).
 
-1. **Interview.** Before any work the agent calls `run_options()`, asks you about every optional part, and saves
-   your answers. Anything you turn off is skipped.
-2. **Pipeline with gates.** `scaffold, design, features, backend, store setup, localize, analytics, ASO,
-   metadata, screenshots, TestFlight`. A stage is done only when `pipeline_mark` passes its gate; blockers stop
-   the run with a `NEEDS_HUMAN.md`.
-3. **You submit.** App Store submission is always human, in the App Store Connect web UI.
+## FAQ
+
+**Does it need Claude?** No. It is a standard MCP server. The run playbook is served by the server itself (tool
+`playbook()`, prompt `run`, resource `appfactory://playbook`), so any MCP-capable agent can follow it.
+
+**Why a Mac?** The app is built and tested with Xcode on your machine. Research works anywhere.
+
+**Is my data sent anywhere?** Only to the services you turn on, with your own keys. There is no AppFactory
+server and no telemetry.
+
+**Can I change the rules?** Yes. The defaults (subscription with a free trial, hard paywall plus a discounted
+offer, a quiz onboarding, 6 app and 8 store languages) are recommendations. You answer each one before a run.
+
+**How do I update?** `@latest` in the MCP command picks up new releases when your agent restarts.
 
 ## Docs
 
-- [docs/SETUP.md](docs/SETUP.md): credentials and per-app choices
-- [docs/PIPELINE_PLAYBOOK.md](docs/PIPELINE_PLAYBOOK.md): the why, order and gotchas of every stage
-- [docs/TOOLS.md](docs/TOOLS.md): every tool (generated)
-- [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [AGENTS.md](AGENTS.md)
+- [docs/SETUP.md](docs/SETUP.md): services, keys and environment variables
+- [docs/PIPELINE_PLAYBOOK.md](docs/PIPELINE_PLAYBOOK.md): every stage, its order and its gotchas
+- [docs/TOOLS.md](docs/TOOLS.md): all 120+ tools
+- [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md)
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). If AppFactory saves you time, a ⭐
+helps other people find it.
 
 ## License
 
