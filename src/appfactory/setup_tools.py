@@ -12,7 +12,26 @@ from typing import Any
 from . import cli
 from . import config as cfg
 
-CREDENTIALS_HINT = "call setup_credentials([...]) and ask the user to type the keys in the browser page"
+CREDENTIALS_HINT = ("give the user the `add_keys` commands from setup_status (keys go into the MCP entry as "
+                    "environment variables, never into the chat), then ask them to restart the agent; "
+                    "setup_credentials([...]) opens a local browser form instead if they prefer")
+
+
+def add_keys_commands(keys: list[str]) -> dict[str, str]:
+    """Ready-to-edit commands that re-add the MCP with the missing keys as environment variables."""
+    envs = [f"{cfg.env_name(k)}=<{k}>" for k in keys]
+    return {
+        "claude_code": "claude mcp remove appfactory -s user; claude mcp add appfactory -s user "
+                       + " ".join(f"-e {e}" for e in envs) + " -- uvx appfactory@latest",
+        "codex": "codex mcp remove appfactory; codex mcp add appfactory "
+                 + " ".join(f"--env {e}" for e in envs) + " -- uvx appfactory@latest",
+        "gemini_cli": "gemini mcp remove appfactory; gemini mcp add appfactory "
+                      + " ".join(f"-e {e}" for e in envs) + " uvx appfactory@latest",
+        "cursor": "~/.cursor/mcp.json: add an \"env\" object to the appfactory entry with "
+                  + ", ".join(f'"{cfg.env_name(k)}": "<{k}>"' for k in keys),
+        "note": "Keep keys already set in the entry. Replace every <...> with the real value; values stay in "
+                "the agent's local MCP config and never pass through the chat.",
+    }
 
 
 def _chosen(c: dict[str, Any]) -> set[str]:
@@ -32,7 +51,7 @@ def status() -> dict[str, Any]:
     chosen = "services" in c
     enabled = _chosen(c)
     missing_bins = cli.missing_binaries(enabled)
-    services, nxt = [], []
+    services, nxt, missing_keys = [], [], []
     if not chosen:
         nxt.append(ASK_SERVICES)
     for name, spec in cfg.SERVICES.items():
@@ -48,10 +67,11 @@ def status() -> dict[str, Any]:
                                 **({"install": h} if b in missing_bins else {})}
                                for b, h in spec["binaries"].items()]
             need = [k for k in keys if k["state"] == "missing" and not k["optional"]]
+            missing_keys += [k["key"] for k in need]
             plain = [k["key"] for k in need if not k["secret"]]
             secret = [k["key"] for k in need if k["secret"]]
             if plain:
-                nxt.append(f"{name}: ask the user for {', '.join(plain)} and call setup_set(key, value) for each.")
+                nxt.append(f"{name}: {', '.join(plain)} missing: ask the user and call setup_set(key, value), or add them with the `add_keys` commands.")
             if secret:
                 nxt.append(f"{name}: secrets {', '.join(secret)} are missing; {CREDENTIALS_HINT}.")
             for b in row["binaries"]:
@@ -63,7 +83,7 @@ def status() -> dict[str, Any]:
     return {"ok": True, "config_path": str(cfg.CONFIG_PATH), "config_exists": cfg.CONFIG_PATH.exists(),
             "services_chosen": chosen, "services": services,
             "approvals": c.get("approvals", "required") if c.get("approvals") in ("required", "off") else "required",
-            "next": nxt}
+            "next": nxt, **({"add_keys": add_keys_commands(missing_keys)} if missing_keys else {})}
 
 
 def set_services(enable: list[str] | None, disable: list[str] | None) -> dict[str, Any]:
@@ -124,5 +144,5 @@ def required() -> dict[str, Any] | None:
             "error": "AppFactory is not set up yet. Do the setup with the user right now, then continue the run.",
             "next": todo, "how": "setup_status() -> ask the user in chat which services they want (research needs "
                                  "nothing) -> setup_services(enable=[...]) -> setup_set(key, value) for non-secret "
-                                 "keys -> setup_credentials([...]) for secrets (the user fills a browser form) -> "
+                                 "keys -> the add_keys command from setup_status for secrets (MCP env vars; restart the agent) -> "
                                  "setup_status() shows no missing keys -> continue with run_options()."}

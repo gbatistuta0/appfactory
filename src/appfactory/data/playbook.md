@@ -18,9 +18,10 @@ with `NEEDS_HUMAN.md`. **App Store submission always stays with the human.**
    step 1. Later runs just use the saved config; the user can change it any time by asking you (same tools). If it shows missing setup for what the user wants, ask the user in
    chat about EACH service separately (never bundle them; only real dependencies go together: ai needs supabase,
    maestro needs xcode), call `setup_services(enable=[...])`, set non-secret
-   keys with `setup_set(key, value)`, then call `setup_credentials([...])` for secrets: it opens a local
-   browser page where the user types the keys (they never pass through the chat). Tell the user to Save, then
-   call `setup_status()` again. `setup_approvals("required")` is the safe default; only the human can turn
+   keys with `setup_set(key, value)`. For secrets, give the user the `add_keys` command for their agent from
+   `setup_status()`: keys go into the MCP entry as `APPFACTORY_*` environment variables, like any MCP, and never
+   through the chat. After they restart the agent, call `setup_status()` again. (`setup_credentials([...])`
+   opens a local browser form instead, only if the user prefers it.) `setup_approvals("required")` is the safe default; only the human can turn
    approvals off (on that page).
 1. **Ask about every optional part first.** When the user says run, before any other work call
    `run_options()` and ask each question (one at a time, or as one checklist if your agent supports

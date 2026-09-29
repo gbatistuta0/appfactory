@@ -253,3 +253,15 @@ def test_setup_page_is_well_formed_html():
                 assert self.stack and self.stack[-1] == tag, f"unbalanced </{tag}>"; self.stack.pop()
     p = P(); p.feed(setup_gui.PAGE.read_text(encoding="utf-8"))
     assert not p.stack and {"main", "script", "h1"} <= p.seen
+
+
+def test_keys_from_environment_like_any_mcp(monkeypatch):
+    from appfactory import config as cfg, setup_tools
+    setup_tools.set_services(["supabase"], [])
+    st = setup_tools.status()
+    assert "APPFACTORY_SUPABASE_ACCESS_TOKEN=<supabase_access_token>" in st["add_keys"]["claude_code"]
+    monkeypatch.setenv("APPFACTORY_SUPABASE_ACCESS_TOKEN", "sbp_test")
+    assert cfg.load_config()["supabase_access_token"] == "sbp_test"
+    assert "add_keys" not in setup_tools.status()
+    cfg.save_config(cfg.load_config())  # env values must never be written to the file
+    assert "sbp_test" not in cfg.CONFIG_PATH.read_text()

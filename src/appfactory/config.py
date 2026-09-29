@@ -97,12 +97,34 @@ SECRET_KEYS = {
 # config.toml overrides DEFAULT_LOCALES (48 languages); load_config() already applies this.
 
 
+ENV_PREFIX = "APPFACTORY_"
+
+
+def env_name(key: str) -> str:
+    """Environment variable for a config key, as set in the MCP entry (`-e APPFACTORY_ASC_KEY_ID=...`)."""
+    return ENV_PREFIX + key.upper()
+
+
+def env_values() -> dict[str, Any]:
+    """Config values passed through the environment (the usual MCP way to hand a server its keys)."""
+    out: dict[str, Any] = {}
+    for key in KNOWN_KEYS:
+        v = os.environ.get(env_name(key), "").strip()
+        if v:
+            out[key] = os.path.expanduser(v) if key.endswith("filepath") else v
+    services = os.environ.get(env_name("services"), "").strip()
+    if services:
+        out["services"] = [s.strip() for s in services.split(",") if s.strip()]
+    return out
+
+
 def load_config() -> dict[str, Any]:
-    """Load config; return empty if absent. Missing locales fall back to the default."""
+    """Config file merged with APPFACTORY_* environment variables (env wins). Missing locales use the default."""
     cfg: dict[str, Any] = {}
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH, "rb") as f:
             cfg = tomllib.load(f)
+    cfg.update(env_values())
     cfg.setdefault("locales", DEFAULT_LOCALES)
     return cfg
 
@@ -121,6 +143,8 @@ def _toml_value(value: Any) -> str:
 
 def save_config(cfg: dict[str, Any]) -> Path:
     """Write config with 0600 permissions. Flat TOML; values are str/bool/int/list[str]."""
+    env = env_values()
+    cfg = {k: v for k, v in cfg.items() if not (k in env and env[k] == v)}  # env values never land in the file
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     lines = ["# AppFactory config — not committed to git, secrets live here (chmod 600)\n"]
     for key in sorted(cfg.keys()):

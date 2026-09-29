@@ -1,6 +1,6 @@
 [project]
 name = "appfactory"
-version = "0.1.1"
+version = "0.1.2"
 description = "Open-source MCP server that takes an iOS subscription app from idea to the App Store"
 readme = "README.md"
 license = "MIT"

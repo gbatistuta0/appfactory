@@ -18,20 +18,32 @@ Requires a Mac, Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ### 1. Add the MCP to your agent
 
-One line, no installer. The server command is `uvx appfactory`.
+Like any MCP server. Research works with no keys at all:
 
-| Agent | How |
+| Agent | Command |
 |---|---|
-| Claude Code | `claude mcp add --scope user appfactory -- uvx appfactory` |
-| Codex CLI | `codex mcp add appfactory -- uvx appfactory` |
-| Gemini CLI | `gemini mcp add appfactory uvx appfactory` |
-| Cursor | `~/.cursor/mcp.json`: `{"mcpServers": {"appfactory": {"command": "uvx", "args": ["appfactory"]}}}` |
+| Claude Code | `claude mcp add appfactory -s user -- uvx appfactory@latest` |
+| Codex CLI | `codex mcp add appfactory -- uvx appfactory@latest` |
+| Gemini CLI | `gemini mcp add appfactory uvx appfactory@latest` |
+| Cursor | `~/.cursor/mcp.json`: `{"mcpServers": {"appfactory": {"command": "uvx", "args": ["appfactory@latest"]}}}` |
 
-### 2. Ask your agent: "Set up AppFactory"
+### 2. Add keys for the services you use
 
-The agent calls `setup_status`, asks which services you want, and turns them on. Keys never go through the chat:
-for secrets it opens a local page in your browser (127.0.0.1 only, one-time token) where you type them; they are
-stored in `~/.appfactory/config.toml` (mode 0600). `appfactory doctor` shows what is configured.
+Keys are environment variables on the MCP entry, named `APPFACTORY_<KEY>`. For example, App Store Connect in
+Claude Code:
+
+```bash
+claude mcp add appfactory -s user \
+  -e APPFACTORY_ASC_KEY_ID=ABC123DEFG \
+  -e APPFACTORY_ASC_ISSUER_ID=00000000-0000-0000-0000-000000000000 \
+  -e APPFACTORY_ASC_KEY_FILEPATH=~/keys/AuthKey_ABC123DEFG.p8 \
+  -e APPFACTORY_TEAM_ID=TEAMID1234 \
+  -- uvx appfactory@latest
+```
+
+You don't need to know the names up front: say **"Set up AppFactory"** (or just start a run). The agent asks
+which services you want, one by one, and gives you the exact command for your agent with the keys that are
+still missing. Keys never go through the chat. Every variable is listed in [docs/SETUP.md](docs/SETUP.md).
 
 Then try this first prompt. It needs no accounts:
 
