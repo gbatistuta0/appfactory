@@ -22,11 +22,7 @@ claude mcp add appfactory -s user -- uvx appfactory@latest
 
 ---
 
-> **You:** Find 3 underserved iOS app niches in Health & Fitness and validate the best one.
->
-> **Agent:** *(calls `idea_harvest`, `idea_evaluate`, `aso_niche_score`, `aso_competitor_iap`)*
-> "Water tracker" scores **68 / GO**: strong search demand, 47% of the top results have under 1k ratings and 43%
-> haven't shipped an update in 6 months. Here's what the leaders charge and an available name...
+<p align="center"><img src="docs/demo/demo.gif" alt="AppFactory validating an iOS app niche with live App Store data" width="900"></p>
 
 That first step needs no accounts. From there, the same agent can take the idea all the way to a TestFlight build.
 
