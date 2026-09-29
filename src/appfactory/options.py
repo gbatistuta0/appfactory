@@ -154,10 +154,21 @@ def current(app_dir: str | None = None) -> dict[str, Any]:
     return out
 
 
+def _services_chosen() -> bool:
+    """Services were already picked during setup (config has `services`), so a run doesn't ask them again."""
+    return "services" in cfg.load_config()
+
+
 def listing(app_dir: str | None = None) -> dict[str, Any]:
     vals = current(app_dir)
-    return {"ok": True, "instruction": INSTRUCTION, "confirmed": confirmed(app_dir),
-            "options": [{**o, "current": vals[o["id"]]} for o in OPTIONS]}
+    skip = _services_chosen()
+    out = {"ok": True, "instruction": INSTRUCTION, "confirmed": confirmed(app_dir),
+           "options": [{**o, "current": vals[o["id"]]} for o in OPTIONS
+                       if not (skip and o["store"] == "config.services")]}
+    if skip:
+        out["services_note"] = ("Services were chosen during setup and are not asked again; change them with "
+                                "setup_services if the user wants.")
+    return out
 
 
 # ---------------------------------------------------------------- validation
@@ -234,6 +245,9 @@ def apply_to_spec(spec: dict[str, Any], answers: dict[str, Any]) -> dict[str, An
 
 
 def save(answers: dict[str, Any], app_dir: str | None = None) -> dict[str, Any]:
+    if _services_chosen():
+        on = cfg.enabled_services()
+        answers = {**{o["id"]: o["id"] in on for o in OPTIONS if o["store"] == "config.services"}, **answers}
     errs = validate(answers)
     if errs:
         return {"ok": False, "errors": errs}

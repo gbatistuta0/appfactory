@@ -236,3 +236,20 @@ def test_services_are_asked_one_by_one_and_dependencies_follow():
     on = {s["name"] for s in r["services"] if s["enabled"]}
     assert {"ai", "supabase", "maestro", "xcode"} <= on and "lottie" not in on
     assert setup_tools.set_services([], ["supabase"])["ok"] is False
+
+
+def test_setup_page_is_well_formed_html():
+    from html.parser import HTMLParser
+    from appfactory import setup_gui
+
+    class P(HTMLParser):
+        def __init__(self):
+            super().__init__(); self.stack = []; self.seen = set()
+        def handle_starttag(self, tag, attrs):
+            self.seen.add(tag)
+            if tag in ("style", "script", "head", "body", "main"): self.stack.append(tag)
+        def handle_endtag(self, tag):
+            if tag in ("style", "script", "head", "body", "main"):
+                assert self.stack and self.stack[-1] == tag, f"unbalanced </{tag}>"; self.stack.pop()
+    p = P(); p.feed(setup_gui.PAGE.read_text(encoding="utf-8"))
+    assert not p.stack and {"main", "script", "h1"} <= p.seen

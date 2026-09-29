@@ -99,3 +99,10 @@ def test_playbook_asks_options_first():
     before = text.split("## Before you start", 1)[1]
     assert before.lstrip().startswith("0. **Setup first") and "\n1. **Ask about every optional part first.**" in before
     assert "setup_status()" in before and "run_options()" in before
+
+
+def test_run_options_skips_services_chosen_during_setup():
+    from appfactory import config as cfg, options
+    cfg.save_config({"services": ["research", "design"]})
+    ids = {o["id"] for o in options.listing()["options"]}
+    assert "design" not in ids and "supabase" not in ids and "monetization" in ids
