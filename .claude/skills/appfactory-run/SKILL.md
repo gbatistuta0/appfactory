@@ -8,7 +8,7 @@ description: Use when building or shipping a new SwiftUI iOS subscription app en
 The playbook lives in the appfactory MCP server, not here. Load it first and follow it:
 
 1. Call the `playbook` tool of the appfactory MCP server (or read the resource `appfactory://playbook`,
-   or use the MCP prompt `appfactory_run`).
+   or use the MCP prompt `run`).
 2. Follow it exactly. In Claude Code, subagents are available: dispatch each stage to an Agent with the role
    `orchestrator_next_action` returns, keep at most one worker beside the lead, and never trust a worker's
    "done" over `pipeline_mark`.

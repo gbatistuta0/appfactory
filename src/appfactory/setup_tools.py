@@ -19,6 +19,14 @@ def _chosen(c: dict[str, Any]) -> set[str]:
     return cfg.enabled_services(c) if "services" in c else {"research"}
 
 
+# Real dependencies only: turning a service on also turns these on.
+REQUIRES: dict[str, list[str]] = {"ai": ["supabase"], "maestro": ["xcode"]}
+
+ASK_SERVICES = ("Ask about EACH service separately (one yes/no per service, with its description); never bundle "
+                "services into one choice. The only links are REQUIRES (e.g. ai needs supabase). If your question UI "
+                "caps the number of options, split them over several questions. Then call setup_services(enable=[...]).")
+
+
 def status() -> dict[str, Any]:
     c = cfg.load_config()
     chosen = "services" in c
@@ -26,10 +34,10 @@ def status() -> dict[str, Any]:
     missing_bins = cli.missing_binaries(enabled)
     services, nxt = [], []
     if not chosen:
-        nxt.append("Ask the user which services they want (research needs nothing), then call "
-                   "setup_services(enable=[...]).")
+        nxt.append(ASK_SERVICES)
     for name, spec in cfg.SERVICES.items():
-        row: dict[str, Any] = {"name": name, "description": spec["description"], "enabled": name in enabled}
+        row: dict[str, Any] = {"name": name, "description": spec["description"], "enabled": name in enabled,
+                               "requires": REQUIRES.get(name, [])}
         if name in enabled:
             keys = []
             for k in spec["keys"] + spec.get("optional_keys", []):
@@ -67,6 +75,11 @@ def set_services(enable: list[str] | None, disable: list[str] | None) -> dict[st
         return {"ok": False, "error": "research is always on"}
     c = cfg.load_config()
     new = (_chosen(c) | set(enable)) - set(disable)
+    for n in list(new):
+        new |= set(REQUIRES.get(n, []))
+    blocked = [f"{n} needs {r}" for n in new for r in REQUIRES.get(n, []) if r in disable]
+    if blocked:
+        return {"ok": False, "error": "; ".join(blocked)}
     c["services"] = [n for n in cfg.SERVICES if n in new or cfg.SERVICES[n].get("always_on")]
     cfg.save_config(c)
     return status()

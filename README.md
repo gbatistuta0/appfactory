@@ -40,7 +40,7 @@ Then try this first prompt. It needs no accounts:
 ## Works with
 
 Claude Code, Codex CLI, Gemini CLI and Cursor. The run playbook is served by the MCP server itself (tool
-`playbook()`, prompt `appfactory_run`, resource `appfactory://playbook`), so any MCP-capable agent can follow it.
+`playbook()`, prompt `run`, resource `appfactory://playbook`), so any MCP-capable agent can follow it.
 
 ## Choose what you use
 

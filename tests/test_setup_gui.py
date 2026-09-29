@@ -207,7 +207,7 @@ def test_run_tools_return_setup_required_until_setup(monkeypatch, tmp_path):
 
 def test_run_prompt_and_playbook_start_with_setup():
     assert "setup_status()" in server.playbook().split("## Before you start", 1)[1][:900]
-    assert "setup_status()" in server.appfactory_run_prompt()[:200]
+    assert "setup_status()" in server.run_prompt()[:200]
 
 
 def test_cli_has_no_agent_wiring_and_setup_flags(monkeypatch):
@@ -226,3 +226,13 @@ def test_run_prints_url_when_browser_unavailable(capsys, monkeypatch):
     assert setup_gui.run() == 0
     out = capsys.readouterr().out
     assert "http://127.0.0.1:" in out and "?t=" in out and "could not open a browser" in out
+
+
+def test_services_are_asked_one_by_one_and_dependencies_follow():
+    from appfactory import setup_tools
+    st = setup_tools.status()
+    assert "EACH service separately" in " ".join(st["next"])
+    r = setup_tools.set_services(["ai", "maestro"], [])
+    on = {s["name"] for s in r["services"] if s["enabled"]}
+    assert {"ai", "supabase", "maestro", "xcode"} <= on and "lottie" not in on
+    assert setup_tools.set_services([], ["supabase"])["ok"] is False

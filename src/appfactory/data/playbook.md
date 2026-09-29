@@ -1,7 +1,7 @@
 # AppFactory Playbook
 
 The canonical run playbook for the AppFactory MCP server. It works with any MCP-capable agent
-(Claude Code, Codex CLI, Gemini CLI, Cursor, ...). Get it from the MCP prompt `appfactory_run`, the
+(Claude Code, Codex CLI, Gemini CLI, Cursor, ...). Get it from the MCP prompt `run`, the
 resource `appfactory://playbook` or the tool `playbook()`.
 
 ## Goal
@@ -16,7 +16,8 @@ with `NEEDS_HUMAN.md`. **App Store submission always stays with the human.**
 0. **Setup first (first run).** Call `setup_status()`. `pipeline_next`, `orchestrator_preflight` and
    `orchestrator_next_action` return `setup_required` until this is done; when it is, continue straight into
    step 1. Later runs just use the saved config; the user can change it any time by asking you (same tools). If it shows missing setup for what the user wants, ask the user in
-   chat which services they want (research needs nothing), call `setup_services(enable=[...])`, set non-secret
+   chat about EACH service separately (never bundle them; only real dependencies go together: ai needs supabase,
+   maestro needs xcode), call `setup_services(enable=[...])`, set non-secret
    keys with `setup_set(key, value)`, then call `setup_credentials([...])` for secrets: it opens a local
    browser page where the user types the keys (they never pass through the chat). Tell the user to Save, then
    call `setup_status()` again. `setup_approvals("required")` is the safe default; only the human can turn
