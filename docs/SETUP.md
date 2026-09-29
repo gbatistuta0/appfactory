@@ -1,7 +1,19 @@
 # Setup
 
-`appfactory setup` walks through all of this interactively (secrets are read with a hidden prompt and stored in
-`~/.appfactory/config.toml`, mode 0600). `appfactory doctor` shows what is configured and what is missing.
+Setup happens inside your agent. After adding the MCP (see the [README](../README.md)), ask it to "Set up
+AppFactory". It uses these tools, none of which need a config file:
+
+- `setup_status()`: per service, whether it is enabled, which keys are set or missing (never the values), missing
+  tools with install commands, the approvals mode, and what to do next.
+- `setup_services(enable, disable)`: choose services (research is always on).
+- `setup_set(key, value)`: non-secret keys only (Key ID, Issuer ID, Team ID, .p8 path, support email, ...).
+- `setup_credentials(services)`: opens a local page in your browser (127.0.0.1, random port, one-time token,
+  stops after Save or 30 idle minutes) where you type the secrets and can test the App Store Connect connection.
+  Secrets never pass through the chat or the model, and the page never shows saved values again.
+- `setup_approvals("required")`: only you can turn human approvals off, with the toggle on that page.
+
+Keys are stored in `~/.appfactory/config.toml` (mode 0600). `appfactory doctor` shows what is configured;
+`appfactory setup` is an optional terminal wizard for the same thing (`appfactory setup --browser` opens the page).
 Only set up the services you use: see "Choose what you use" in the [README](../README.md).
 
 AppFactory runs locally on a Mac against your own accounts. Toolchain per service: Xcode + `xcodegen`

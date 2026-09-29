@@ -15,32 +15,26 @@ has a gate the agent must pass. You do the final App Store submission.
 
 Requires a Mac, Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
-```bash
-# installed (no clone)
-uvx --from git+https://github.com/gbatistuta0/appfactory appfactory setup
+### 1. Add the MCP to your agent
 
-# or from source
-git clone https://github.com/gbatistuta0/appfactory && cd appfactory
-uv sync && uv run appfactory setup
-```
-
-`setup` asks which services you use, stores keys locally (`~/.appfactory/config.toml`, mode 0600), and connects
-your agent. `appfactory doctor` shows what is configured.
-
-Then restart your agent and try this first prompt. It needs no accounts:
-
-> Find 3 underserved iOS app niches in Health & Fitness and validate the best one
-
-## Connect your agent manually
-
-`setup` does this for you. If you prefer to do it yourself, the server command is `uvx --from git+https://github.com/gbatistuta0/appfactory appfactory-mcp`:
+One line, no installer. The server command is `uvx --from git+https://github.com/gbatistuta0/appfactory appfactory-mcp`.
 
 | Agent | How |
 |---|---|
 | Claude Code | `claude mcp add --scope user appfactory -- uvx --from git+https://github.com/gbatistuta0/appfactory appfactory-mcp` |
 | Codex CLI | `~/.codex/config.toml`: `[mcp_servers.appfactory]` with `command = "uvx"`, `args = ["--from", "git+https://github.com/gbatistuta0/appfactory", "appfactory-mcp"]` |
-| Gemini CLI | `~/.gemini/settings.json`: `"mcpServers": {"appfactory": {"command": "uvx", "args": [...same...]}}` |
+| Gemini CLI | `~/.gemini/settings.json`: `"mcpServers": {"appfactory": {"command": "uvx", "args": ["--from", "git+https://github.com/gbatistuta0/appfactory", "appfactory-mcp"]}}` |
 | Cursor | `~/.cursor/mcp.json`: same shape as Gemini |
+
+### 2. Ask your agent: "Set up AppFactory"
+
+The agent calls `setup_status`, asks which services you want, and turns them on. Keys never go through the chat:
+for secrets it opens a local page in your browser (127.0.0.1 only, one-time token) where you type them; they are
+stored in `~/.appfactory/config.toml` (mode 0600). `appfactory doctor` shows what is configured.
+
+Then try this first prompt. It needs no accounts:
+
+> Find 3 underserved iOS app niches in Health & Fitness and validate the best one
 
 ## Works with
 

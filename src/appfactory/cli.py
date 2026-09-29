@@ -1,6 +1,8 @@
 """AppFactory setup CLI — stdlib only.
 
-    appfactory setup [--offline]              interactive wizard (re-runnable)
+    appfactory setup [--offline]              terminal wizard: services, credentials, approvals (fallback;
+                                              normally your agent does this with the setup_* MCP tools)
+    appfactory setup --browser                the local credentials page (same one `setup_credentials` opens)
     appfactory doctor                         non-interactive status
     appfactory services enable|disable NAME   toggle one service
     appfactory approve ID                     approve a pending irreversible action (y/N, terminal only)
@@ -16,26 +18,23 @@ import argparse
 import getpass
 import json
 import os
-import re
 import shutil
-import subprocess
 import sys
 import time
-import tomllib
 from pathlib import Path
 from typing import Any
 
 from . import config as cfg
 
-AGENTS = ("claude", "codex", "gemini", "cursor")
 FIRST_PROMPT = "Find 3 underserved iOS app niches in Health & Fitness and validate the best one"
+APPROVALS_LINES = (
+    "Human approvals: live writes (App Store, Supabase, RevenueCat, GitHub, uploads) wait for you to run",
+    "`appfactory approve <id>` in a terminal. WARNING: turning this off lets an agent reading untrusted",
+    "web data make irreversible changes on its own. App Store submission and destructive SQL always ask.",
+)
 
 
 # ---------------------------------------------------------------- helpers
-def _home() -> Path:
-    return Path(os.path.expanduser("~"))
-
-
 def _ask(prompt: str, default: str = "") -> str:
     shown = f" [{default}]" if default else ""
     ans = input(f"{prompt}{shown}: ").strip()
@@ -67,111 +66,29 @@ def missing_binaries(services: set[str]) -> dict[str, str]:
     return out
 
 
-def mcp_command() -> list[str]:
-    """How an agent should launch the server: repo checkout → uv run; installed → script/uvx."""
-    repo = Path(__file__).resolve().parents[2]
-    if (repo / "pyproject.toml").exists() and (repo / "src" / "appfactory").is_dir():
-        return ["uv", "run", "--directory", str(repo), "appfactory-mcp"]
-    if exe := shutil.which("appfactory-mcp"):
-        return [exe]
-    return ["uvx", "--from", "appfactory", "appfactory-mcp"]
-
-
-def _backup(path: Path) -> Path | None:
-    if not path.exists():
-        return None
-    bak = path.with_name(f"{path.name}.bak-{time.strftime('%Y%m%d%H%M%S')}")
-    shutil.copy2(path, bak)
-    return bak
-
-
-# ---------------------------------------------------------------- agent configs
-def agent_config_path(agent: str) -> Path | None:
-    return {"codex": _home() / ".codex" / "config.toml",
-            "gemini": _home() / ".gemini" / "settings.json",
-            "cursor": _home() / ".cursor" / "mcp.json"}.get(agent)
-
-
-def _merge_json(path: Path, command: list[str]) -> str:
-    data: dict[str, Any] = {}
-    if path.exists() and path.read_text(encoding="utf-8").strip():
-        data = json.loads(path.read_text(encoding="utf-8"))
-    bak = _backup(path)
-    data.setdefault("mcpServers", {})["appfactory"] = {"command": command[0], "args": command[1:]}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    return f"wrote {path}" + (f" (backup {bak.name})" if bak else "")
-
-
-def _merge_codex(path: Path, command: list[str]) -> str:
-    text = path.read_text(encoding="utf-8") if path.exists() else ""
-    tomllib.loads(text)  # refuse to touch a file we cannot parse
-    bak = _backup(path)
-    # drop an existing [mcp_servers.appfactory] (and its sub-tables) up to the next unrelated header
-    kept, skipping = [], False
-    for line in text.splitlines():
-        header = re.match(r"\s*\[+\s*([^\]]+?)\s*\]+", line)
-        if header:
-            skipping = header.group(1).startswith("mcp_servers.appfactory")
-        if not skipping:
-            kept.append(line)
-    body = "\n".join(kept).rstrip()
-    block = ("[mcp_servers.appfactory]\n"
-             f"command = {json.dumps(command[0])}\n"
-             f"args = [{', '.join(json.dumps(a) for a in command[1:])}]\n")
-    new = (body + "\n\n" if body else "") + block
-    tomllib.loads(new)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(new, encoding="utf-8")
-    return f"wrote {path}" + (f" (backup {bak.name})" if bak else "")
-
-
-def install_agent(agent: str, command: list[str]) -> str:
-    if agent == "claude":
-        argv = ["claude", "mcp", "add", "--scope", "user", "appfactory", "--", *command]
-        if shutil.which("claude"):
-            subprocess.run(["claude", "mcp", "remove", "--scope", "user", "appfactory"],
-                           capture_output=True)
-            r = subprocess.run(argv, capture_output=True, text=True)
-            if r.returncode == 0:
-                return "registered with Claude Code (user scope)"
-            return f"`claude mcp add` failed: {r.stderr.strip()} — run: {' '.join(argv)}"
-        return f"claude CLI not found — run: {' '.join(argv)}"
-    path = agent_config_path(agent)
-    assert path is not None
-    return _merge_codex(path, command) if agent == "codex" else _merge_json(path, command)
-
-
-def agent_status() -> dict[str, str]:
-    out = {}
-    for agent in AGENTS:
-        if agent == "claude":
-            p = _home() / ".claude.json"
-            found = p.exists() and '"appfactory"' in p.read_text(encoding="utf-8", errors="ignore")
-            out[agent] = "configured" if found else ("claude CLI present" if shutil.which("claude") else "not found")
-            continue
-        p = agent_config_path(agent)
-        if not p or not p.exists():
-            out[agent] = "not found"
-        else:
-            txt = p.read_text(encoding="utf-8", errors="ignore")
-            out[agent] = "configured" if ("mcp_servers.appfactory" in txt or '"appfactory"' in txt) else "no appfactory entry"
-    return out
-
-
 # ---------------------------------------------------------------- setup
-def _validate_asc(c: dict[str, Any], offline: bool) -> None:
+def asc_check(c: dict[str, Any], offline: bool) -> dict[str, Any]:
+    """Validate the saved ASC credentials. ok: False = problem, True = live check passed, None = not checked."""
+    msgs: list[str] = []
+    ok: bool | None = None
     p8 = c.get("asc_key_filepath")
     if p8 and not Path(os.path.expanduser(p8)).is_file():
-        print(f"  ! .p8 not found at {p8}")
+        msgs.append(f"! .p8 not found at {p8}")
+        ok = False
     if offline:
-        return
+        return {"ok": ok, "messages": msgs}
     from . import asc_cli
     if not asc_cli.binary():
-        print("  (skipping live ASC check: asc CLI missing)")
-        return
+        msgs.append("(skipping live ASC check: asc CLI missing)")
+        return {"ok": ok, "messages": msgs}
     r = asc_cli.run(["apps", "list", "--limit=1"], timeout=60)
-    print("  ASC live check: " + ("OK" if r.get("ok") else f"FAILED ({r.get('error', 'unknown')})"))
+    msgs.append("ASC live check: " + ("OK" if r.get("ok") else f"FAILED ({r.get('error', 'unknown')})"))
+    return {"ok": bool(r.get("ok")) and ok is not False, "messages": msgs}
+
+
+def _validate_asc(c: dict[str, Any], offline: bool) -> None:
+    for m in asc_check(c, offline)["messages"]:
+        print("  " + m)
 
 
 def setup(offline: bool = False) -> int:
@@ -203,9 +120,9 @@ def setup(offline: bool = False) -> int:
             val = _ask_secret(f"  {label}", cur) if key in cfg.SECRET_KEYS else _ask(f"  {label}", cur)
             if val:
                 c[key] = os.path.expanduser(val) if key.endswith("filepath") else val
-    print("\n   Human approvals: live writes (App Store, Supabase, RevenueCat, GitHub, uploads) wait for you to run")
-    print("   `appfactory approve <id>` in a terminal. WARNING: turning this off lets an agent reading untrusted")
-    print("   web data make irreversible changes on its own. App Store submission and destructive SQL always ask.")
+    print()
+    for line in APPROVALS_LINES:
+        print("   " + line)
     keep = c.get("approvals", "required") != "off"
     c["approvals"] = "required" if _yes("   Require human approval for live writes? (strongly recommended)", keep) else "off"
     cfg.save_config(c)
@@ -219,23 +136,10 @@ def setup(offline: bool = False) -> int:
         for b, hint in missing.items():
             print(f"   - {b}: {hint}")
 
-    print("\n3) Connect agents")
-    command = mcp_command()
-    print(f"  server command: {' '.join(command)}")
-    connected = []
-    for agent in AGENTS:
-        if _yes(f"  - {agent}?", agent == "claude"):
-            try:
-                print("   " + install_agent(agent, command))
-                connected.append(agent)
-            except Exception as e:  # noqa: BLE001 — keep the wizard going
-                print(f"   ! {agent}: {e}")
-
     print("\nDone.")
     print(f"  services: {', '.join(chosen)}")
-    print(f"  agents:   {', '.join(connected) or 'none'}")
-    print("  Restart your agent, then try this first prompt (no accounts needed):")
-    print(f'    "{FIRST_PROMPT}"')
+    print("  In your agent, ask it to set up AppFactory (it calls setup_status), or try this first prompt")
+    print(f'  (no accounts needed):\n    "{FIRST_PROMPT}"')
     return 0
 
 
@@ -259,9 +163,6 @@ def doctor() -> int:
     for name in sorted(enabled):
         for b in cfg.SERVICES[name]["binaries"]:
             print(f"  {b:<11} {'MISSING — ' + missing_bins[b] if b in missing_bins else 'ok'}")
-    print("agents:")
-    for agent, state in agent_status().items():
-        print(f"  {agent:<11} {state}")
     for note in cfg.doctor_notes(c):
         print(f"note: {note}")
     return 0
@@ -318,7 +219,9 @@ def main(argv: list[str] | None = None) -> int:
         return mcp_main()  # launched by an MCP client (e.g. `uvx appfactory`)
     p = argparse.ArgumentParser(prog="appfactory", description="AppFactory setup and diagnostics")
     sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("setup", help="interactive setup wizard")
+    s = sub.add_parser("setup", help="terminal setup wizard (optional; your agent can do this with setup_* tools)")
+    s.add_argument("--cli", action="store_true", help=argparse.SUPPRESS)  # kept for old scripts: the default
+    s.add_argument("--browser", action="store_true", help="enter credentials on a local browser page")
     s.add_argument("--offline", action="store_true", help="skip network validation")
     sub.add_parser("doctor", help="show configuration status")
     sub.add_parser("serve", help="run the MCP server over stdio")
@@ -338,6 +241,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
     if a.cmd == "setup":
         try:
+            if a.browser:
+                from . import setup_gui
+                return setup_gui.run(offline=a.offline)
             return setup(offline=a.offline)
         except (KeyboardInterrupt, EOFError):
             print("\naborted")

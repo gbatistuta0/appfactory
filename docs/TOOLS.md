@@ -265,6 +265,16 @@ Tools whose service is disabled return `service_disabled` and do nothing (see th
 | `screenshot_generate_sample` | Generate a sample image with fal.ai → Resources/sample_headshot.jpg (enriches Result/Gallery) | ai |
 | `screenshot_onboarding_heroes` | LEGACY, OPT-IN ONLY: fal hero images per onboarding step (onb_step0..N). Onboarding visuals are designed in Claude Design (design/screens.json boards); use this only for a... | ai |
 
+## setup
+
+| Tool | What it does | Needs service |
+|---|---|---|
+| `setup_status` | Setup state per service: enabled, keys set/missing (never values), missing tools with install commands, approvals mode, and `next` steps. Call this first; nothing here needs a... | none |
+| `setup_services` | Turn services on or off (research is always on). Ask the user which ones they want first. Returns setup_status | none |
+| `setup_set` | Set ONE non-secret config key (e.g. asc_key_id, team_id, support_email). Secrets are refused: use setup_credentials so they never pass through the chat. An empty value clears... | none |
+| `setup_approvals` | Set human approvals for live writes: 'required' (recommended). 'off' is refused here; only the human can switch it off, on the setup_credentials page | none |
+| `setup_credentials` | Open a local browser page (127.0.0.1, random port, one-time token) where the USER types the credentials of the given (default: all enabled) services. Secrets never reach you.... | none |
+
 ## signing
 
 | Tool | What it does | Needs service |

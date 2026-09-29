@@ -97,4 +97,5 @@ def test_pipeline_and_preflight_refuse_until_confirmed(tmp_path):
 def test_playbook_asks_options_first():
     text = server.playbook()
     before = text.split("## Before you start", 1)[1]
-    assert before.lstrip().startswith("1. **Ask about every optional part first.**") and "run_options()" in before
+    assert before.lstrip().startswith("0. **Setup first") and "\n1. **Ask about every optional part first.**" in before
+    assert "setup_status()" in before and "run_options()" in before

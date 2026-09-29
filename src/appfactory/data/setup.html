@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppFactory setup</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#14171f;--muted:#5d6675;--line:#e2e5eb;--accent:#4f46e5;--accent-fg:#fff;--ok:#127a3d;--bad:#b3261e;--warn-bg:#fff4e0;--warn-fg:#7a4a00;--soft:#eef0ff}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1116;--card:#181b23;--fg:#eceef3;--muted:#98a1b3;--line:#2a2f3a;--accent:#8b85ff;--accent-fg:#0f1116;--ok:#4cc38a;--bad:#ff8a80;--warn-bg:#2c2412;--warn-fg:#f0c674;--soft:#22254a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px 96px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:18px;margin:0 0 4px}
+.sub,.muted{color:var(--muted)}.sub{margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:0 0 10px}
+.svc{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.svc b{display:block}.needs{font-size:12.5px;color:var(--muted);margin-top:2px}
+.tag{display:inline-block;font-size:11px;background:var(--soft);color:var(--accent);border-radius:99px;padding:1px 8px;margin-left:6px;vertical-align:1px}
+.switch{position:relative;flex:none;width:44px;height:26px}
+.switch input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
+.switch i{position:absolute;inset:0;background:var(--line);border-radius:99px;transition:.15s}
+.switch i:after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.15s;box-shadow:0 1px 2px #0004}
+.switch input:checked+i{background:var(--accent)}.switch input:checked+i:after{transform:translateX(18px)}
+.switch input:disabled{cursor:not-allowed}.switch input:disabled+i{opacity:.55}
+.switch input:focus-visible+i{outline:2px solid var(--accent);outline-offset:2px}
+label.f{display:block;margin:12px 0 0;font-weight:600;font-size:14px}
+label.f small{font-weight:400;color:var(--muted)}
+input[type=text],input[type=password]{width:100%;margin-top:4px;padding:9px 11px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px}
+input[type=text]:focus,input[type=password]:focus{outline:2px solid var(--accent);border-color:transparent}
+.help{font-size:13.5px;color:var(--muted);white-space:pre-line;margin:6px 0 0}
+a{color:var(--accent)}
+.hint{font-size:12.5px;margin-top:4px;color:var(--muted)}.hint.ok{color:var(--ok)}.hint.bad{color:var(--bad)}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 6px;word-break:break-all}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:8px 14px}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+button:disabled{opacity:.5;cursor:default}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nav{display:flex;justify-content:space-between;margin-top:18px;gap:10px}
+.warn{background:var(--warn-bg);color:var(--warn-fg);border-radius:10px;padding:10px 12px;font-size:13.5px;margin-top:10px}
+.err{background:var(--warn-bg);color:var(--bad);border-radius:8px;padding:8px 12px;margin:0 0 12px;display:none}
+</head>
+<body>
+<main>
+<h1>AppFactory credentials</h1>
+<p class="sub">This page runs only on your computer. Keys are stored in <code id="cfgpath">~/.appfactory/config.toml</code> (mode 0600) and never go through your agent or the chat.</p>
+<div class="err" id="err" role="alert"></div>
+<section id="view"><p class="muted">Loading…</p></section>
+</main>
+<script>
+"use strict";
+const Q=new URLSearchParams(location.search);
+const TOKEN=Q.get("t")||sessionStorage.getItem("t")||"";
+try{sessionStorage.setItem("t",TOKEN)}catch(e){}
+history.replaceState(null,"",location.pathname);
+let S=null,approvals=true,vals={};
+
+const $=(id)=>document.getElementById(id);
+function h(tag,attrs,...kids){const e=document.createElement(tag);
+  for(const[k,v]of Object.entries(attrs||{})){if(k==="class")e.className=v;else if(k.startsWith("on"))e.addEventListener(k.slice(2),v);else if(v===true)e.setAttribute(k,"");else if(v!==false&&v!=null)e.setAttribute(k,v)}
+  for(const c of kids.flat())if(c!=null&&c!==false)e.append(c.nodeType?c:document.createTextNode(c));return e}
+function showErr(m){const e=$("err");e.textContent=m||"";e.style.display=m?"block":"none"}
+async function api(path,body){
+  const r=await fetch(path,{method:body===undefined?"GET":"POST",headers:{"X-Setup-Token":TOKEN,"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({error:"bad response"}));
+  if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j}
+// turn bare domains in the help text into safe links
+function linkify(text){
+  const re=/((?:https?:\/\/)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|ai|io|dev)(?:\/[^\s,;)>]*)?)/gi,out=[];let last=0,m;
+  while((m=re.exec(text))){let u=m[1],tail="";const t=u.match(/[.:]+$/);if(t){tail=t[0];u=u.slice(0,-tail.length)}
+    out.push(text.slice(last,m.index));
+    out.push(h("a",{href:/^https?:/i.test(u)?u:"https://"+u,target:"_blank",rel:"noopener noreferrer"},u));
+    last=m.index+m[1].length-tail.length}
+  out.push(text.slice(last));return out}
+
+function card(s){
+  const c=h("div",{class:"card"},h("b",{},s.name),h("span",{class:"muted"}," — "+s.description));
+  if(s.help)c.append(h("p",{class:"help"},linkify(s.help)));
+  for(const f of s.fields){
+    const inp=h("input",{type:f.secret?"password":"text","data-key":f.key,autocomplete:"off",spellcheck:"false",
+      placeholder:f.secret?(f.set?"saved — leave empty to keep":"paste here"):(f.file?"/Users/you/Downloads/AuthKey_XXXXXXXXXX.p8":""),
+      value:f.secret?"":f.value});
+    const base=f.file?"Full path to the file on this computer (a leading ~ works).":"";
+    const hint=h("div",{class:"hint"},base);
+    if(f.file){const chk=async()=>{const p=inp.value.trim();if(!p){hint.className="hint";hint.textContent=base;return}
+      try{const r=await api("/api/check-file",{path:p});hint.className="hint "+(r.exists?"ok":"bad");hint.textContent=r.exists?"File found.":"No file at that path."}catch(e){}};
+      let t;inp.oninput=()=>{clearTimeout(t);t=setTimeout(chk,300)};if(inp.value)chk()}
+    c.append(h("label",{class:"f"},f.label,f.optional?h("small",{}," (optional)"):null,inp),hint)}
+  if(s.name==="apple"){
+    const out=h("div",{class:"hint"});const b=h("button",{type:"button",style:"margin-top:12px"},"Test App Store Connect connection");
+    b.onclick=async()=>{b.disabled=true;out.className="hint";out.textContent="Testing…";
+      try{await api("/api/save",{values:collect()});
+        const r=await api("/api/test-asc",{});out.className="hint "+(r.ok===true?"ok":r.ok===false?"bad":"");
+        out.textContent=(r.messages.join(" ")||"Saved. Nothing to check.")}catch(e){out.className="hint bad";out.textContent=e.message}b.disabled=false};
+    c.append(b,out)}
+  return c}
+
+function collect(){const o={};for(const el of document.querySelectorAll("[data-key]"))o[el.dataset.key]=el.value;return o}
+
+function render(){
+  const cb=h("input",{type:"checkbox",role:"switch","aria-label":"Require approval",checked:approvals});
+  const warn=h("div",{class:"warn",style:"display:"+(approvals?"none":"block")},"Warning: "+S.approvals_warning);
+  cb.onchange=()=>{approvals=cb.checked;warn.style.display=approvals?"none":"block"};
+  const save=h("button",{class:"primary",type:"button"},"Save");
+  save.onclick=async()=>{showErr("");save.disabled=true;
+    try{await api("/api/save",{values:collect(),approvals});await api("/api/finish",{});done()}catch(e){showErr(e.message);save.disabled=false}};
+  $("view").replaceChildren(...S.services.map(card),
+    h("div",{class:"card svc"},h("div",{},h("b",{},"Require human approval for live writes",h("span",{class:"tag"},"recommended")),
+      S.approvals_warning.split(" WARNING")[0]+"."),h("label",{class:"switch"},cb,h("i"))),warn,
+    h("div",{class:"nav"},h("span"),save))}
+
+function done(){$("view").replaceChildren(h("h2",{},"Saved"),h("p",{class:"muted"},"Your keys are stored locally and this page has stopped its server. Go back to your agent and tell it you are done; it will check with setup_status(). You can close this tab."))}
+
+(async()=>{try{S=await api("/api/state");$("cfgpath").textContent=S.config_path;approvals=S.approvals;render()}
+  catch(e){document.body.replaceChildren(h("main",{},h("h1",{},"Link expired"),h("p",{class:"muted"},"Ask your agent to call setup_credentials again. ("+e.message+")")))}})();
+</script>
+</body>
+</html>

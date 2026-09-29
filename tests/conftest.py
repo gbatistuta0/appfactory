@@ -14,6 +14,13 @@ def _isolated_config(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_PATH", d / "config.toml")
 
 
+@pytest.fixture(autouse=True)
+def _setup_not_required(monkeypatch):
+    """Run tools refuse with setup_required on a fresh config; most tests are about something else."""
+    from appfactory import setup_tools
+    monkeypatch.setattr(setup_tools, "required", lambda: None)
+
+
 def approve_next(result: dict) -> str:
     """Test helper: approve the pending approval a tool just requested (what `appfactory approve` does)."""
     from appfactory import approvals
