@@ -1,6 +1,7 @@
 # AppFactory
 
 [![CI](https://github.com/gbatistuta0/appfactory/actions/workflows/ci.yml/badge.svg)](https://github.com/gbatistuta0/appfactory/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/appfactory.svg)](https://pypi.org/project/appfactory/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 ![MCP](https://img.shields.io/badge/MCP-server-8A2BE2.svg)
@@ -17,14 +18,14 @@ Requires a Mac, Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ### 1. Add the MCP to your agent
 
-One line, no installer. The server command is `uvx --from git+https://github.com/gbatistuta0/appfactory appfactory-mcp`.
+One line, no installer. The server command is `uvx appfactory`.
 
 | Agent | How |
 |---|---|
-| Claude Code | `claude mcp add --scope user appfactory -- uvx --from git+https://github.com/gbatistuta0/appfactory appfactory-mcp` |
-| Codex CLI | `~/.codex/config.toml`: `[mcp_servers.appfactory]` with `command = "uvx"`, `args = ["--from", "git+https://github.com/gbatistuta0/appfactory", "appfactory-mcp"]` |
-| Gemini CLI | `~/.gemini/settings.json`: `"mcpServers": {"appfactory": {"command": "uvx", "args": ["--from", "git+https://github.com/gbatistuta0/appfactory", "appfactory-mcp"]}}` |
-| Cursor | `~/.cursor/mcp.json`: same shape as Gemini |
+| Claude Code | `claude mcp add --scope user appfactory -- uvx appfactory` |
+| Codex CLI | `codex mcp add appfactory -- uvx appfactory` |
+| Gemini CLI | `gemini mcp add appfactory uvx appfactory` |
+| Cursor | `~/.cursor/mcp.json`: `{"mcpServers": {"appfactory": {"command": "uvx", "args": ["appfactory"]}}}` |
 
 ### 2. Ask your agent: "Set up AppFactory"
 
