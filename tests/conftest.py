@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
+
+# Point HOME at a throwaway dir before appfactory is imported, so module-level paths and
+# module-scoped fixtures never read the developer's real ~/.appfactory.
+os.environ["HOME"] = tempfile.mkdtemp(prefix="appfactory-test-home-")
+
 import pytest
 
 from appfactory import config
