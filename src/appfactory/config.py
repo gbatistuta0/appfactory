@@ -361,3 +361,16 @@ def scrub(obj: Any, values: list[str] | None = None) -> Any:
         items = [scrub(v, values) for v in obj]
         return obj if all(a is b for a, b in zip(items, obj)) else type(obj)(items)
     return obj
+
+
+# Where each service's credentials come from (shown by `appfactory setup`).
+SERVICE_HELP: dict[str, str] = {
+    "apple": "App Store Connect > Users and Access > Integrations > App Store Connect API > Team Keys > (+).\n"
+             "Role: Admin (or App Manager). Download AuthKey_XXXXXXXXXX.p8 once: the 10 characters are the Key ID,\n"
+             "the Issuer ID is shown above the key list. Team ID: developer.apple.com/account > Membership details.",
+    "supabase": "supabase.com/dashboard/account/tokens > Generate new token.",
+    "revenuecat": "RevenueCat > Project settings > API keys > + New secret API key (v2, read & write).",
+    "ai": "Provider keys stay server-side (Supabase edge function secrets). fal: fal.ai/dashboard/keys;\n"
+          "OpenAI: platform.openai.com/api-keys; Anthropic: console.anthropic.com/settings/keys. All optional.",
+    "github": "Uses the `gh` CLI login (`gh auth login`). Set a user only if gh has several accounts.",
+}

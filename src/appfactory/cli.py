@@ -195,6 +195,8 @@ def setup(offline: bool = False) -> int:
         if not keys:
             continue
         print(f" [{name}]")
+        if cfg.SERVICE_HELP.get(name):
+            print("  " + cfg.SERVICE_HELP[name].replace("\n", "\n  "))
         for key in keys:
             label = cfg.KNOWN_KEYS.get(key, key) + (" (optional)" if key in spec.get("optional_keys", []) else "")
             cur = str(c.get(key, "") or "")
