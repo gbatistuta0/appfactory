@@ -65,6 +65,23 @@ def test_price_change_in_spec_flows_to_storekit(tmp_path):
     assert storekit.parity(_hue(), path)  # old spec now drifts
 
 
+def test_day_spelled_trial_is_written_and_compared_as_a_week(tmp_path):
+    """P7D and P1W are the same offer: the config is written canonically and parity accepts both."""
+    s = _hue()
+    for p in s["subscription"]["products"]:
+        if p.get("intro"):
+            p["intro"]["duration"] = "P7D"
+    path = storekit.write(s, tmp_path)
+    subs = {x["productID"]: x for x in json.loads(path.read_text())["subscriptionGroups"][0]["subscriptions"]}
+    assert subs["com.example.hue.weekly"]["introductoryOffer"]["subscriptionPeriod"] == "P1W"
+    assert storekit.parity(s, path) == []            # the P7D spec still matches
+    week = _hue()
+    for p in week["subscription"]["products"]:
+        if p.get("intro"):
+            p["intro"]["duration"] = "P1W"
+    assert storekit.parity(week, path) == []         # and so does the canonical one
+
+
 def test_mcp_entries(tmp_path):
     spec.save(tmp_path, _hue())
     r = storekit.generate_for_app(tmp_path)

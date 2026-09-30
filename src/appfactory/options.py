@@ -51,8 +51,9 @@ OPTIONS: list[dict[str, Any]] = [
     _opt("ai_features", "Does the app have AI features (calls go through the server-side proxy)?",
          "bool", True, "ai.enabled", requires=["ai", "supabase"]),
     _opt("free_trial", "Offer a free trial on the main subscriptions?", "bool", True, "options.free_trial"),
-    _opt("trial_days", "How many days should the free trial last?", "number", 3, "options.trial_days",
-         min=1, max=30, requires=["free_trial"], requires_when="*"),
+    _opt("trial_days", "How many days should the free trial last (3, 7, 14 or 30 — the lengths the App "
+         "Store offers)?", "number", 3, "options.trial_days", allowed=sorted(spec_mod.TRIAL_DAYS),
+         requires=["free_trial"], requires_when="*"),
     _opt("hard_paywall", "Show a hard, personalized paywall right after onboarding?", "bool", True,
          "options.hard_paywall"),
     _opt("offer_paywall", "Show a discounted offer paywall when the user dismisses the hard paywall?",
@@ -177,6 +178,13 @@ def _active(o: dict[str, Any], v: Any) -> bool:
     return v is not None and (when == "*" or v == when)
 
 
+def _number_ok(o: dict[str, Any], v: Any) -> bool:
+    """A number answer is either one of `allowed` (trial_days) or inside min..max."""
+    if isinstance(v, bool) or not isinstance(v, int):
+        return False
+    return v in o["allowed"] if o.get("allowed") else o.get("min", v) <= v <= o.get("max", v)
+
+
 def validate(answers: dict[str, Any]) -> list[str]:
     errs: list[str] = []
     unknown = sorted(set(answers) - set(BY_ID))
@@ -193,9 +201,9 @@ def validate(answers: dict[str, Any]) -> list[str]:
             errs.append(f"{o['id']}: must be true or false")
         elif kind == "choice" and v not in o["choices"]:
             errs.append(f"{o['id']}: must be one of {o['choices']}")
-        elif kind == "number" and (isinstance(v, bool) or not isinstance(v, int)
-                                   or not o.get("min", v) <= v <= o.get("max", v)):
-            errs.append(f"{o['id']}: must be an integer in {o.get('min')}..{o.get('max')}")
+        elif kind == "number" and not _number_ok(o, v):
+            errs.append(f"{o['id']}: must be one of {o['allowed']}" if o.get("allowed")
+                        else f"{o['id']}: must be an integer in {o.get('min')}..{o.get('max')}")
         elif kind == "list" and (not isinstance(v, list) or not all(isinstance(x, str) and x for x in v)):
             errs.append(f"{o['id']}: must be a list of strings")
     if errs:
@@ -231,10 +239,14 @@ def apply_to_spec(spec: dict[str, Any], answers: dict[str, Any]) -> dict[str, An
     # free trial → every non-offer product's intro offer
     trial = answers.get("free_trial")
     days = answers.get("trial_days") or 3
+    # App Store Connect models a trial as a length it offers: 7 days is P1W, never P7D (store_setup
+    # refuses anything else). An answer saved by an older version falls back to its day spelling and
+    # is then caught by spec validation instead of at store setup.
+    duration = spec_mod.TRIAL_DAYS.get(days) or spec_mod.intro_duration(f"P{days}D")
     for p in (sp.get("subscription") or {}).get("products", []):
         if p.get("offering") == "offer" or trial is None:
             continue
-        p["intro"] = {"type": "free", "duration": f"P{days}D"} if trial else None
+        p["intro"] = {"type": "free", "duration": duration} if trial else None
     if "healthkit" in answers:
         sp.setdefault("consent", {})["health"] = bool(answers["healthkit"])
     if answers.get("mascot") is False and isinstance(sp.get("design"), dict):

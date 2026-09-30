@@ -43,6 +43,8 @@ PERIODS = {"P1W": "ONE_WEEK", "P1M": "ONE_MONTH", "P2M": "TWO_MONTHS", "P3M": "T
            "P6M": "SIX_MONTHS", "P1Y": "ONE_YEAR"}
 INTRO_DURATIONS = {"P3D": "THREE_DAYS", "P1W": "ONE_WEEK", "P2W": "TWO_WEEKS", "P1M": "ONE_MONTH",
                    "P2M": "TWO_MONTHS", "P3M": "THREE_MONTHS", "P6M": "SIX_MONTHS", "P1Y": "ONE_YEAR"}
+# Day-based spellings of the same lengths (spec_mod.INTRO_DURATION_ALIASES) are normalised first, so a
+# spec written with P7D still plans as ONE_WEEK.
 # Offline fallback for currency → ASC territories (live runs read each territory's currency).
 CURRENCY_TERRITORIES = {
     "EUR": ["AUT", "BEL", "BGR", "BIH", "CYP", "DEU", "ESP", "EST", "FIN", "FRA", "GRC", "HRV", "IRL", "ITA",
@@ -134,7 +136,8 @@ def desired_state(spec: dict[str, Any], listing: dict[str, Any], config: dict[st
             "group_level": p["level"], "usd_price": _money(p["usd"]),
             "intro_offer": None if not intro else {
                 "mode": "FREE_TRIAL" if intro.get("type") == "free" else str(intro.get("type")).upper(),
-                "duration": INTRO_DURATIONS.get(intro["duration"], intro["duration"]), "periods": 1},
+                "duration": INTRO_DURATIONS.get(spec_mod.intro_duration(intro["duration"]),
+                                                intro["duration"]), "periods": 1},
             "offer_product": p.get("offering") == "offer",
             "localizations": {loc: ((iap.get("products") or {}).get(p["key"]) or {}).get(loc) for loc in store_locs},
             "overrides": {cur: _money(t[p["key"]]) for cur, t in (sub.get("price_overrides") or {}).items() if p["key"] in t},

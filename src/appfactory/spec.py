@@ -161,6 +161,19 @@ MASCOT_STATES = ["idle", "wave", "cheer", "think", "love", "snap", "trophy", "sl
 
 _ISO_DURATION = re.compile(r"^P\d+[DWMY]$")
 
+# Intro-offer lengths App Store Connect models (SubscriptionOfferDuration); nothing else can be created.
+INTRO_DURATIONS = ("P3D", "P1W", "P2W", "P1M", "P2M", "P3M", "P6M", "P1Y")
+# Day-based spellings of the same lengths — older run options wrote these, so they stay readable.
+INTRO_DURATION_ALIASES = {"P7D": "P1W", "P14D": "P2W", "P30D": "P1M"}
+# Free-trial lengths the run options offer, in days → the duration App Store Connect accepts.
+TRIAL_DAYS = {3: "P3D", 7: "P1W", 14: "P2W", 30: "P1M"}
+
+
+def intro_duration(iso: str) -> str:
+    """Canonical intro-offer duration: P7D → P1W, P14D → P2W, P30D → P1M; anything else unchanged."""
+    return INTRO_DURATION_ALIASES.get(iso, iso)
+
+
 # ASC SubscriptionGracePeriodDuration / renewalType values (Apple API reference, checked 2026-09-24).
 HEALTH_TYPES = {
     "activeEnergyBurned", "basalEnergyBurned", "bodyMass", "height", "stepCount", "bodyFatPercentage",
@@ -309,8 +322,9 @@ def validate(spec: dict[str, Any]) -> list[str]:
         if not isinstance(p.get("usd"), (int, float)) or p["usd"] <= 0:
             errs.append(f"{p.get('key')}: bad usd price")
         intro = p.get("intro")
-        if intro and not _ISO_DURATION.match(intro.get("duration", "")):
-            errs.append(f"{p.get('key')}: bad intro duration")
+        if intro and intro_duration(intro.get("duration", "")) not in INTRO_DURATIONS:
+            errs.append(f"{p.get('key')}: intro duration must be one of {list(INTRO_DURATIONS)} "
+                        f"(or an alias: {list(INTRO_DURATION_ALIASES)})")
         if p.get("offering") == "offer" and intro:
             errs.append(f"{p.get('key')}: offer products never carry an intro offer")
     for cur, table in sub.get("price_overrides", {}).items():

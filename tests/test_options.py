@@ -52,6 +52,9 @@ def test_validation_errors():
     assert any("en" in e for e in options.validate({**a, "app_languages": ["de", "en"]}))
     # a trial length without a trial is fine
     assert options.validate({**a, "free_trial": False}) == []
+    # only the lengths the App Store offers (3, 7, 14, 30 days)
+    assert any("must be one of" in e for e in options.validate({**a, "trial_days": 5}))
+    assert options.validate({**a, "trial_days": 14}) == []
 
 
 def test_save_pending_then_scaffold_merges_and_consumes(tmp_path):
@@ -76,7 +79,7 @@ def test_save_into_existing_spec_and_stage_na(tmp_path):
     assert r["ok"], r
     sp = spec.load(app)
     assert sp["options_confirmed"] and sp["health"]["enabled"] and sp["consent"]["health"]
-    assert sp["subscription"]["products"][0]["intro"]["duration"] == "P7D"
+    assert sp["subscription"]["products"][0]["intro"]["duration"] == "P1W"  # 7 days, as ASC models it
     g = gates.validate_stage(app, "app_preview")
     assert g["ok"] and g["option_disabled"] == "app_preview"
     assert "n/a" in pipeline.stage_instruction(app, "app_preview")

@@ -37,10 +37,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Commit author and committer emails must be @appfactory.local or noreply.github.com
+      - name: Commit author and committer emails must be @appfactory.local or a github.com noreply
         run: |
+          # noreply@github.com is GitHub's own identity on the merge commit a pull_request run checks out.
           bad=$(git log --format='%h %ae %ce' | awk '
-            { for (i = 2; i <= 3; i++) if ($i !~ /@appfactory\.local$/ && $i !~ /noreply\.github\.com$/) { print; break } }')
+            { for (i = 2; i <= 3; i++) if ($i !~ /@appfactory\.local$/ && $i !~ /noreply\.github\.com$/ && $i != "noreply@github.com") { print; break } }')
           if [ -n "$bad" ]; then
             echo "Commits with a non-allowed email:"; echo "$bad"; exit 1
           fi
