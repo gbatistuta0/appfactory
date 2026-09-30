@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import config as cfg
+from . import spec as spec_mod
 
 DOCS = {"privacy": "privacy-policy", "terms": "terms", "support": "support"}
 LEGAL_URL_RE = re.compile(
@@ -84,11 +85,12 @@ def _plans_sentence(spec: dict[str, Any]) -> str:
 
 
 def _trial_sentence(spec: dict[str, Any]) -> str:
-    trials = sorted({p["intro"]["duration"] for p in spec["subscription"]["products"]
+    trials = sorted({spec_mod.intro_duration(p["intro"]["duration"]) for p in spec["subscription"]["products"]
                      if p.get("intro") and p["intro"].get("type") == "free"})
     if not trials:
         return "there is no free trial."
-    days = {"P3D": "3-day", "P1W": "1-week", "P2W": "2-week", "P1M": "1-month"}
+    days = {"P3D": "3-day", "P1W": "1-week", "P2W": "2-week", "P1M": "1-month", "P2M": "2-month",
+            "P3M": "3-month", "P6M": "6-month", "P1Y": "1-year"}
     t = " or ".join(days.get(d, d) for d in trials)
     return (f"some plans include a {t} free trial for eligible new subscribers. Apple gives one introductory "
             "offer per Apple Account in the subscription group. If you do not cancel at least 24 hours before "

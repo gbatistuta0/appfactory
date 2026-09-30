@@ -79,7 +79,7 @@ def generate(spec: dict[str, Any]) -> dict[str, Any]:
                 "internalID": f"2110{i:04d}9",
                 "numberOfPeriods": 1,
                 "paymentMode": _PAYMENT_MODES.get(intro.get("type", "free"), "free"),
-                "subscriptionPeriod": intro["duration"],
+                "subscriptionPeriod": spec_mod.intro_duration(intro["duration"]),
             }
         subscriptions.append(entry)
 
@@ -136,7 +136,7 @@ def _intro_tuple(intro: dict[str, Any] | None) -> tuple[str, str] | None:
     if not intro:
         return None
     mode = intro.get("paymentMode") or _PAYMENT_MODES.get(intro.get("type", ""), intro.get("type"))
-    return (str(mode), str(intro.get("subscriptionPeriod") or intro.get("duration")))
+    return (str(mode), spec_mod.intro_duration(str(intro.get("subscriptionPeriod") or intro.get("duration"))))
 
 
 def parity(spec: dict[str, Any], storekit_path: str | Path) -> list[str]:

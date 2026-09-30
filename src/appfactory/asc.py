@@ -22,6 +22,7 @@ from typing import Any
 
 from . import asc_cli
 from . import config as cfg
+from . import spec as spec_mod
 
 
 def _fastlane_runtime() -> tuple[str, dict[str, str]]:
@@ -142,12 +143,18 @@ SPEC_INTRO_DURATIONS = {"P3D": "THREE_DAYS", "P1W": "ONE_WEEK", "P2W": "TWO_WEEK
 
 
 def intro_from_spec(intro: dict | None) -> dict | None:
-    """spec product intro {"type": "free", "duration": "P3D"} → ASC {mode, duration}; None stays None."""
+    """spec product intro {"type": "free", "duration": "P3D"} → ASC {mode, duration}; None stays None.
+
+    Day-based spellings of a supported length (P7D, P14D, P30D) are accepted as aliases."""
     if not intro:
         return None
     if intro.get("type") != "free":
         raise ValueError(f"unsupported intro type {intro.get('type')!r} (only free trials are spec-driven)")
-    return {"mode": "FREE_TRIAL", "duration": SPEC_INTRO_DURATIONS[intro["duration"]]}
+    iso = spec_mod.intro_duration(intro["duration"])
+    if iso not in SPEC_INTRO_DURATIONS:
+        raise ValueError(f"unsupported intro duration {intro['duration']!r} "
+                         f"(App Store Connect offers {list(SPEC_INTRO_DURATIONS)})")
+    return {"mode": "FREE_TRIAL", "duration": SPEC_INTRO_DURATIONS[iso]}
 
 
 # App Review Notes (appStoreReviewDetails.notes ≤4000). 7-madde, app-jenerik + parametreli.

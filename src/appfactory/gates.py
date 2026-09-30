@@ -1166,7 +1166,8 @@ def _check_iap_against_spec(subs: list[dict[str, Any]], spec: dict[str, Any], gr
             if n:
                 return {"ok": False, "reason": f"{p['id']}: an offer product must NOT have an intro offer ({n} found) — spec: none"}
             continue
-        want = f"FREE_TRIAL {SPEC_INTRO_DURATIONS.get(intro['duration'], intro['duration'])}"
+        iso = spec_mod.intro_duration(intro["duration"])
+        want = f"FREE_TRIAL {SPEC_INTRO_DURATIONS.get(iso, iso)}"
         modes = s.get("intro_modes")
         if modes is not None and modes != [want]:
             return {"ok": False, "reason": f"{p['id']}: intro offer {modes} != spec {want}"}

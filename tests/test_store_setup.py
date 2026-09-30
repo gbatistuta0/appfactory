@@ -393,3 +393,30 @@ def test_review_notes_are_synced_without_markers_or_phone(tmp_path: Path):
     assert ss.review_notes_problems("Call +90 555 123 45 67 any time")
     assert ss.review_notes_problems("x" * 4001)
     assert ss.review_notes_problems("Released 2026-09-27, build 6.") == []
+
+
+def test_every_trial_length_option_plans_clean(tmp_path: Path):
+    """Each free-trial length run_options offers must pass store_setup's own validation (issue #1)."""
+    from appfactory import options, spec as spec_mod
+    answers = {o["id"]: o["default"] for o in options.OPTIONS}
+    for days, iso in sorted(spec_mod.TRIAL_DAYS.items()):
+        app, sp = make_app(tmp_path / f"trial{days}")
+        spec_mod.save(app, options.apply_to_spec(sp, {**answers, "free_trial": True, "trial_days": days}))
+        intros = {p["intro"]["duration"] for p in spec_mod.load(app)["subscription"]["products"] if p.get("intro")}
+        assert intros == {iso}, (days, intros)
+        r = ss.run(app, mode="plan", config=CFG)
+        assert r["ok"] is True, (days, r["lines"])
+
+
+def test_day_spelled_intro_duration_is_normalised(tmp_path: Path):
+    """A spec written before the fix (P7D) still plans as the ONE_WEEK offer ASC models."""
+    from appfactory import spec as spec_mod
+    app, sp = make_app(tmp_path)
+    for p in sp["subscription"]["products"]:
+        if p.get("intro"):
+            p["intro"]["duration"] = "P7D"
+    spec_mod.save(app, sp)
+    d = ss.desired_state(spec_mod.load(app), {})
+    assert {s["intro_offer"]["duration"] for s in d["subscriptions"] if s["intro_offer"]} == {"ONE_WEEK"}
+    assert [e for e in ss.validate_desired(d) if "intro" in e] == []
+    assert ss.run(app, mode="plan", config=CFG)["ok"] is True
